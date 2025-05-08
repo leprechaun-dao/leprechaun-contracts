@@ -30,7 +30,7 @@ contract TokenizedAsset is ITokenizedAsset, ERC20, Ownable {
         string memory symbol,
         address factoryAddress
     ) ERC20(name, symbol) Ownable(factoryAddress) {
-        // Set asset ID
+        // Set asset
         assetId = keccak256(abi.encodePacked(name, symbol));
     }
 
