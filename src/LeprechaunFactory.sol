@@ -115,20 +115,14 @@ contract LeprechaunFactory is Ownable {
      * @param tokenAddress The address of the collateral token
      * @param multiplier The collateral multiplier
      */
-    event CollateralTypeRegistered(
-        address indexed tokenAddress,
-        uint256 multiplier
-    );
+    event CollateralTypeRegistered(address indexed tokenAddress, uint256 multiplier);
 
     /**
      * @dev Emitted when a collateral type's parameters are updated
      * @param tokenAddress The address of the collateral token
      * @param multiplier The new collateral multiplier
      */
-    event CollateralTypeUpdated(
-        address indexed tokenAddress,
-        uint256 multiplier
-    );
+    event CollateralTypeUpdated(address indexed tokenAddress, uint256 multiplier);
 
     /**
      * @dev Emitted when a collateral type is deactivated
@@ -141,20 +135,14 @@ contract LeprechaunFactory is Ownable {
      * @param syntheticAsset The address of the synthetic asset
      * @param collateral The address of the collateral
      */
-    event CollateralAllowedForAsset(
-        address indexed syntheticAsset,
-        address indexed collateral
-    );
+    event CollateralAllowedForAsset(address indexed syntheticAsset, address indexed collateral);
 
     /**
      * @dev Emitted when a collateral is disallowed for a synthetic asset
      * @param syntheticAsset The address of the synthetic asset
      * @param collateral The address of the collateral
      */
-    event CollateralDisallowedForAsset(
-        address indexed syntheticAsset,
-        address indexed collateral
-    );
+    event CollateralDisallowedForAsset(address indexed syntheticAsset, address indexed collateral);
 
     /**
      * @dev Emitted when the protocol fee is updated
@@ -174,11 +162,7 @@ contract LeprechaunFactory is Ownable {
      * @param _feeCollector The address where protocol fees will be sent
      * @param _oracle The address of the oracle contract for price feeds
      */
-    constructor(
-        address initialOwner,
-        address _feeCollector,
-        address _oracle
-    ) Ownable(initialOwner) {
+    constructor(address initialOwner, address _feeCollector, address _oracle) Ownable(initialOwner) {
         require(_oracle != address(0), "Invalid oracle address");
         require(_feeCollector != address(0), "Invalid feeCollector address");
 
@@ -204,24 +188,13 @@ contract LeprechaunFactory is Ownable {
         address positionManager
     ) external onlyOwner {
         require(bytes(symbol).length > 0, "Symbol cannot be empty");
-        require(
-            syntheticAssetsBySymbol[symbol] == address(0),
-            "Symbol already in use"
-        );
-        require(
-            positionManager != address(0),
-            "Invalid position manager address"
-        );
-        require(
-            minCollateralRatio >= 10000,
-            "Collateral ratio must be at least 100%"
-        );
+        require(syntheticAssetsBySymbol[symbol] == address(0), "Symbol already in use");
+        require(positionManager != address(0), "Invalid position manager address");
+        require(minCollateralRatio >= 10000, "Collateral ratio must be at least 100%");
         require(priceFeedId != bytes32(0), "Invalid price feed id");
 
         // Deploy new token contract for this asset
-        address tokenAddress = address(
-            new SyntheticAsset(name, symbol, positionManager)
-        );
+        address tokenAddress = address(new SyntheticAsset(name, symbol, positionManager));
 
         // Register price feed for the new asset
         oracle.registerPriceFeed(tokenAddress, priceFeedId);
@@ -247,19 +220,12 @@ contract LeprechaunFactory is Ownable {
      * @param minCollateralRatio The new minimum collateral ratio (scaled by 10000)
      * @param auctionDiscount The new auction discount for liquidations (scaled by 10000)
      */
-    function updateSyntheticAsset(
-        address tokenAddress,
-        uint256 minCollateralRatio,
-        uint256 auctionDiscount
-    ) external onlyOwner {
-        require(
-            syntheticAssets[tokenAddress].tokenAddress != address(0),
-            "Asset not registered"
-        );
-        require(
-            minCollateralRatio >= 10000,
-            "Collateral ratio must be at least 100%"
-        );
+    function updateSyntheticAsset(address tokenAddress, uint256 minCollateralRatio, uint256 auctionDiscount)
+        external
+        onlyOwner
+    {
+        require(syntheticAssets[tokenAddress].tokenAddress != address(0), "Asset not registered");
+        require(minCollateralRatio >= 10000, "Collateral ratio must be at least 100%");
 
         SyntheticAssetInfo storage asset = syntheticAssets[tokenAddress];
         asset.minCollateralRatio = minCollateralRatio;
@@ -274,14 +240,8 @@ contract LeprechaunFactory is Ownable {
      * @notice Once deactivated, no new positions can be created with this asset
      */
     function deactivateSyntheticAsset(address tokenAddress) external onlyOwner {
-        require(
-            syntheticAssets[tokenAddress].tokenAddress != address(0),
-            "Asset not registered"
-        );
-        require(
-            syntheticAssets[tokenAddress].isActive,
-            "Asset already deactivated"
-        );
+        require(syntheticAssets[tokenAddress].tokenAddress != address(0), "Asset not registered");
+        require(syntheticAssets[tokenAddress].isActive, "Asset already deactivated");
 
         syntheticAssets[tokenAddress].isActive = false;
 
@@ -295,16 +255,9 @@ contract LeprechaunFactory is Ownable {
      * @param priceFeedId The ID of the price feed in the oracle
      * @notice Higher multiplier values indicate higher risk and require more collateral
      */
-    function registerCollateralType(
-        address tokenAddress,
-        uint256 multiplier,
-        bytes32 priceFeedId
-    ) external onlyOwner {
+    function registerCollateralType(address tokenAddress, uint256 multiplier, bytes32 priceFeedId) external onlyOwner {
         require(tokenAddress != address(0), "Invalid token address");
-        require(
-            collateralTypes[tokenAddress].tokenAddress == address(0),
-            "Collateral already registered"
-        );
+        require(collateralTypes[tokenAddress].tokenAddress == address(0), "Collateral already registered");
         require(multiplier >= 10000, "Multiplier must be at least 1x (10000)");
         require(priceFeedId != bytes32(0), "Invalid price feed id");
 
@@ -312,11 +265,8 @@ contract LeprechaunFactory is Ownable {
         oracle.registerPriceFeed(tokenAddress, priceFeedId);
 
         // Store collateral information
-        CollateralType memory collateral = CollateralType({
-            tokenAddress: tokenAddress,
-            multiplier: multiplier,
-            isActive: true
-        });
+        CollateralType memory collateral =
+            CollateralType({tokenAddress: tokenAddress, multiplier: multiplier, isActive: true});
 
         collateralTypes[tokenAddress] = collateral;
         allCollateralTypes.push(tokenAddress);
@@ -329,14 +279,8 @@ contract LeprechaunFactory is Ownable {
      * @param tokenAddress The address of the collateral token
      * @param multiplier The new collateral multiplier (scaled by 10000)
      */
-    function updateCollateralType(
-        address tokenAddress,
-        uint256 multiplier
-    ) external onlyOwner {
-        require(
-            collateralTypes[tokenAddress].tokenAddress != address(0),
-            "Collateral not registered"
-        );
+    function updateCollateralType(address tokenAddress, uint256 multiplier) external onlyOwner {
+        require(collateralTypes[tokenAddress].tokenAddress != address(0), "Collateral not registered");
         require(multiplier >= 10000, "Multiplier must be at least 1x (10000)");
 
         collateralTypes[tokenAddress].multiplier = multiplier;
@@ -350,14 +294,8 @@ contract LeprechaunFactory is Ownable {
      * @notice Once deactivated, no new positions can be created with this collateral
      */
     function deactivateCollateralType(address tokenAddress) external onlyOwner {
-        require(
-            collateralTypes[tokenAddress].tokenAddress != address(0),
-            "Collateral not registered"
-        );
-        require(
-            collateralTypes[tokenAddress].isActive,
-            "Collateral already deactivated"
-        );
+        require(collateralTypes[tokenAddress].tokenAddress != address(0), "Collateral not registered");
+        require(collateralTypes[tokenAddress].isActive, "Collateral already deactivated");
 
         collateralTypes[tokenAddress].isActive = false;
 
@@ -369,22 +307,10 @@ contract LeprechaunFactory is Ownable {
      * @param syntheticAsset The address of the synthetic asset
      * @param collateralAddress The address of the collateral token
      */
-    function allowCollateralForAsset(
-        address syntheticAsset,
-        address collateralAddress
-    ) external onlyOwner {
-        require(
-            syntheticAssets[syntheticAsset].tokenAddress != address(0),
-            "Synthetic asset not registered"
-        );
-        require(
-            collateralTypes[collateralAddress].tokenAddress != address(0),
-            "Collateral not registered"
-        );
-        require(
-            !allowedCollateral[syntheticAsset][collateralAddress],
-            "Collateral already allowed for this asset"
-        );
+    function allowCollateralForAsset(address syntheticAsset, address collateralAddress) external onlyOwner {
+        require(syntheticAssets[syntheticAsset].tokenAddress != address(0), "Synthetic asset not registered");
+        require(collateralTypes[collateralAddress].tokenAddress != address(0), "Collateral not registered");
+        require(!allowedCollateral[syntheticAsset][collateralAddress], "Collateral already allowed for this asset");
 
         allowedCollateral[syntheticAsset][collateralAddress] = true;
 
@@ -397,14 +323,8 @@ contract LeprechaunFactory is Ownable {
      * @param collateralAddress The address of the collateral token
      * @notice Existing positions with this collateral will not be affected
      */
-    function disallowCollateralForAsset(
-        address syntheticAsset,
-        address collateralAddress
-    ) external onlyOwner {
-        require(
-            allowedCollateral[syntheticAsset][collateralAddress],
-            "Collateral not allowed for this asset"
-        );
+    function disallowCollateralForAsset(address syntheticAsset, address collateralAddress) external onlyOwner {
+        require(allowedCollateral[syntheticAsset][collateralAddress], "Collateral not allowed for this asset");
 
         allowedCollateral[syntheticAsset][collateralAddress] = false;
 
@@ -438,27 +358,17 @@ contract LeprechaunFactory is Ownable {
      * @return The effective minimum collateral ratio (scaled by 10000)
      * @notice This takes into account both the asset's minimum ratio and the collateral's risk multiplier
      */
-    function getEffectiveCollateralRatio(
-        address syntheticAsset,
-        address collateralAddress
-    ) external view returns (uint256) {
-        require(
-            syntheticAssets[syntheticAsset].tokenAddress != address(0),
-            "Synthetic asset not registered"
-        );
-        require(
-            collateralTypes[collateralAddress].tokenAddress != address(0),
-            "Collateral not registered"
-        );
-        require(
-            allowedCollateral[syntheticAsset][collateralAddress],
-            "Collateral not allowed for this asset"
-        );
+    function getEffectiveCollateralRatio(address syntheticAsset, address collateralAddress)
+        external
+        view
+        returns (uint256)
+    {
+        require(syntheticAssets[syntheticAsset].tokenAddress != address(0), "Synthetic asset not registered");
+        require(collateralTypes[collateralAddress].tokenAddress != address(0), "Collateral not registered");
+        require(allowedCollateral[syntheticAsset][collateralAddress], "Collateral not allowed for this asset");
 
-        uint256 assetMinRatio = syntheticAssets[syntheticAsset]
-            .minCollateralRatio;
-        uint256 collateralMultiplier = collateralTypes[collateralAddress]
-            .multiplier;
+        uint256 assetMinRatio = syntheticAssets[syntheticAsset].minCollateralRatio;
+        uint256 collateralMultiplier = collateralTypes[collateralAddress].multiplier;
 
         // Calculate effective ratio (minRatio * multiplier / 10000)
         return (assetMinRatio * collateralMultiplier) / 10000;
@@ -469,9 +379,7 @@ contract LeprechaunFactory is Ownable {
      * @param syntheticAsset The address of the synthetic asset
      * @return Whether the synthetic asset is active
      */
-    function isSyntheticAssetActive(
-        address syntheticAsset
-    ) external view returns (bool) {
+    function isSyntheticAssetActive(address syntheticAsset) external view returns (bool) {
         return syntheticAssets[syntheticAsset].isActive;
     }
 
@@ -480,9 +388,7 @@ contract LeprechaunFactory is Ownable {
      * @param collateralAddress The address of the collateral token
      * @return Whether the collateral type is active
      */
-    function isCollateralActive(
-        address collateralAddress
-    ) external view returns (bool) {
+    function isCollateralActive(address collateralAddress) external view returns (bool) {
         return collateralTypes[collateralAddress].isActive;
     }
 
@@ -492,9 +398,7 @@ contract LeprechaunFactory is Ownable {
      * @return The auction discount (scaled by 10000)
      * @notice This is the discount applied to the collateral during liquidations
      */
-    function getAuctionDiscount(
-        address syntheticAsset
-    ) external view returns (uint256) {
+    function getAuctionDiscount(address syntheticAsset) external view returns (uint256) {
         return syntheticAssets[syntheticAsset].auctionDiscount;
     }
 

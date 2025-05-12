@@ -15,7 +15,7 @@ library PythStructs {
         // Price exponent
         int32 expo;
         // Unix timestamp of the price update
-        uint publishTime;
+        uint256 publishTime;
     }
 
     // Price feed information

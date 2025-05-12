@@ -89,11 +89,7 @@ contract PositionManager is Ownable {
      * @param amount The amount of additional collateral deposited
      * @param newCollateralAmount The new total collateral amount after deposit
      */
-    event CollateralDeposited(
-        uint256 indexed positionId,
-        uint256 amount,
-        uint256 newCollateralAmount
-    );
+    event CollateralDeposited(uint256 indexed positionId, uint256 amount, uint256 newCollateralAmount);
 
     /**
      * @dev Emitted when collateral is withdrawn from a position
@@ -102,12 +98,7 @@ contract PositionManager is Ownable {
      * @param fee The protocol fee charged for the withdrawal
      * @param newCollateralAmount The new total collateral amount after withdrawal
      */
-    event CollateralWithdrawn(
-        uint256 indexed positionId,
-        uint256 amount,
-        uint256 fee,
-        uint256 newCollateralAmount
-    );
+    event CollateralWithdrawn(uint256 indexed positionId, uint256 amount, uint256 fee, uint256 newCollateralAmount);
 
     /**
      * @dev Emitted when additional synthetic asset is minted from a position
@@ -115,11 +106,7 @@ contract PositionManager is Ownable {
      * @param amount The amount of synthetic asset minted
      * @param newMintedAmount The new total minted amount after the operation
      */
-    event SyntheticAssetMinted(
-        uint256 indexed positionId,
-        uint256 amount,
-        uint256 newMintedAmount
-    );
+    event SyntheticAssetMinted(uint256 indexed positionId, uint256 amount, uint256 newMintedAmount);
 
     /**
      * @dev Emitted when synthetic asset is burned to reduce position debt
@@ -127,11 +114,7 @@ contract PositionManager is Ownable {
      * @param amount The amount of synthetic asset burned
      * @param newMintedAmount The new total minted amount after the operation
      */
-    event SyntheticAssetBurned(
-        uint256 indexed positionId,
-        uint256 amount,
-        uint256 newMintedAmount
-    );
+    event SyntheticAssetBurned(uint256 indexed positionId, uint256 amount, uint256 newMintedAmount);
 
     /**
      * @dev Emitted when a position is closed
@@ -144,10 +127,7 @@ contract PositionManager is Ownable {
      * @param positionId The ID of the position being liquidated
      * @param liquidator The address that initiated the liquidation
      */
-    event LiquidationStarted(
-        uint256 indexed positionId,
-        address indexed liquidator
-    );
+    event LiquidationStarted(uint256 indexed positionId, address indexed liquidator);
 
     /**
      * @dev Constructor
@@ -155,11 +135,7 @@ contract PositionManager is Ownable {
      * @param _oracle The address of the oracle contract for price feeds
      * @param initialOwner The address that will own this contract
      */
-    constructor(
-        address _registry,
-        address _oracle,
-        address initialOwner
-    ) Ownable(initialOwner) {
+    constructor(address _registry, address _oracle, address initialOwner) Ownable(initialOwner) {
         require(_registry != address(0), "Invalid registry address");
         require(_oracle != address(0), "Invalid oracle address");
 
@@ -184,39 +160,20 @@ contract PositionManager is Ownable {
         uint256 mintAmount
     ) external returns (uint256 positionId) {
         // Check if synthetic asset is active
-        require(
-            registry.isSyntheticAssetActive(syntheticAsset),
-            "Synthetic asset not active"
-        );
+        require(registry.isSyntheticAssetActive(syntheticAsset), "Synthetic asset not active");
 
         // Check if collateral is active and allowed for this synthetic asset
-        require(
-            registry.isCollateralActive(collateralAsset),
-            "Collateral not active"
-        );
-        require(
-            registry.allowedCollateral(syntheticAsset, collateralAsset),
-            "Collateral not allowed for this asset"
-        );
+        require(registry.isCollateralActive(collateralAsset), "Collateral not active");
+        require(registry.allowedCollateral(syntheticAsset, collateralAsset), "Collateral not allowed for this asset");
 
         // Check if amount is valid
-        require(
-            collateralAmount > 0,
-            "Collateral amount must be greater than 0"
-        );
+        require(collateralAmount > 0, "Collateral amount must be greater than 0");
         require(mintAmount > 0, "Mint amount must be greater than 0");
 
         // Calculate minimum required collateral
-        uint256 requiredCollateral = _calculateRequiredCollateral(
-            syntheticAsset,
-            collateralAsset,
-            mintAmount
-        );
+        uint256 requiredCollateral = _calculateRequiredCollateral(syntheticAsset, collateralAsset, mintAmount);
 
-        require(
-            collateralAmount >= requiredCollateral,
-            "Insufficient collateral"
-        );
+        require(collateralAmount >= requiredCollateral, "Insufficient collateral");
 
         // Create new position
         positionId = nextPositionId++;
@@ -237,23 +194,12 @@ contract PositionManager is Ownable {
         assetPositions[syntheticAsset].push(positionId);
 
         // Transfer collateral from user
-        IERC20(collateralAsset).safeTransferFrom(
-            msg.sender,
-            address(this),
-            collateralAmount
-        );
+        IERC20(collateralAsset).safeTransferFrom(msg.sender, address(this), collateralAmount);
 
         // Mint synthetic asset to user
         SyntheticAsset(syntheticAsset).mint(msg.sender, mintAmount);
 
-        emit PositionCreated(
-            positionId,
-            msg.sender,
-            syntheticAsset,
-            collateralAsset,
-            collateralAmount,
-            mintAmount
-        );
+        emit PositionCreated(positionId, msg.sender, syntheticAsset, collateralAsset, collateralAmount, mintAmount);
 
         return positionId;
     }
@@ -278,11 +224,7 @@ contract PositionManager is Ownable {
         position.lastUpdateTimestamp = block.timestamp;
 
         // Transfer collateral from user
-        IERC20(position.collateralAsset).safeTransferFrom(
-            msg.sender,
-            address(this),
-            amount
-        );
+        IERC20(position.collateralAsset).safeTransferFrom(msg.sender, address(this), amount);
 
         emit CollateralDeposited(positionId, amount, newCollateralAmount);
     }
@@ -302,27 +244,18 @@ contract PositionManager is Ownable {
         require(position.isActive, "Position not active");
         require(position.owner == msg.sender, "Not position owner");
         require(amount > 0, "Amount must be greater than 0");
-        require(
-            amount <= position.collateralAmount,
-            "Amount exceeds collateral"
-        );
+        require(amount <= position.collateralAmount, "Amount exceeds collateral");
 
         // Calculate fee
         uint256 fee = (amount * registry.protocolFee()) / 10000;
         uint256 amountAfterFee = amount - fee;
 
         // Calculate minimum required collateral
-        uint256 requiredCollateral = _calculateRequiredCollateral(
-            position.syntheticAsset,
-            position.collateralAsset,
-            position.mintedAmount
-        );
+        uint256 requiredCollateral =
+            _calculateRequiredCollateral(position.syntheticAsset, position.collateralAsset, position.mintedAmount);
 
         // Check if remaining collateral is sufficient
-        require(
-            position.collateralAmount - amount >= requiredCollateral,
-            "Insufficient remaining collateral"
-        );
+        require(position.collateralAmount - amount >= requiredCollateral, "Insufficient remaining collateral");
 
         // Update collateral amount
         position.collateralAmount = position.collateralAmount - amount;
@@ -330,24 +263,13 @@ contract PositionManager is Ownable {
 
         // Transfer fee to fee collector
         if (fee > 0) {
-            IERC20(position.collateralAsset).safeTransfer(
-                registry.feeCollector(),
-                fee
-            );
+            IERC20(position.collateralAsset).safeTransfer(registry.feeCollector(), fee);
         }
 
         // Transfer collateral to user
-        IERC20(position.collateralAsset).safeTransfer(
-            msg.sender,
-            amountAfterFee
-        );
+        IERC20(position.collateralAsset).safeTransfer(msg.sender, amountAfterFee);
 
-        emit CollateralWithdrawn(
-            positionId,
-            amount,
-            fee,
-            position.collateralAmount
-        );
+        emit CollateralWithdrawn(positionId, amount, fee, position.collateralAmount);
     }
 
     /**
@@ -369,16 +291,10 @@ contract PositionManager is Ownable {
         uint256 newMintedAmount = position.mintedAmount + amount;
 
         // Calculate minimum required collateral
-        uint256 requiredCollateral = _calculateRequiredCollateral(
-            position.syntheticAsset,
-            position.collateralAsset,
-            newMintedAmount
-        );
+        uint256 requiredCollateral =
+            _calculateRequiredCollateral(position.syntheticAsset, position.collateralAsset, newMintedAmount);
 
-        require(
-            position.collateralAmount >= requiredCollateral,
-            "Insufficient collateral"
-        );
+        require(position.collateralAmount >= requiredCollateral, "Insufficient collateral");
 
         // Update minted amount
         position.mintedAmount = newMintedAmount;
@@ -403,10 +319,7 @@ contract PositionManager is Ownable {
         require(position.isActive, "Position not active");
         require(position.owner == msg.sender, "Not position owner");
         require(amount > 0, "Amount must be greater than 0");
-        require(
-            amount <= position.mintedAmount,
-            "Amount exceeds minted amount"
-        );
+        require(amount <= position.mintedAmount, "Amount exceeds minted amount");
 
         // Update minted amount
         position.mintedAmount = position.mintedAmount - amount;
@@ -433,29 +346,19 @@ contract PositionManager is Ownable {
         require(position.mintedAmount > 0, "No debt to close");
 
         // burn synthetic asset from user
-        SyntheticAsset(position.syntheticAsset).burn(
-            msg.sender,
-            position.mintedAmount
-        );
+        SyntheticAsset(position.syntheticAsset).burn(msg.sender, position.mintedAmount);
 
         // Calculate fee
-        uint256 fee = (position.collateralAmount * registry.protocolFee()) /
-            10000;
+        uint256 fee = (position.collateralAmount * registry.protocolFee()) / 10000;
         uint256 amountAfterFee = position.collateralAmount - fee;
 
         // Transfer fee to fee collector
         if (fee > 0) {
-            IERC20(position.collateralAsset).safeTransfer(
-                registry.feeCollector(),
-                fee
-            );
+            IERC20(position.collateralAsset).safeTransfer(registry.feeCollector(), fee);
         }
 
         // Transfer collateral to user
-        IERC20(position.collateralAsset).safeTransfer(
-            msg.sender,
-            amountAfterFee
-        );
+        IERC20(position.collateralAsset).safeTransfer(msg.sender, amountAfterFee);
 
         // Close position
         position.collateralAmount = 0;
@@ -480,34 +383,20 @@ contract PositionManager is Ownable {
         require(position.mintedAmount > 0, "No debt to liquidate");
 
         // Get effective collateral ratio
-        uint256 effectiveRatio = registry.getEffectiveCollateralRatio(
-            position.syntheticAsset,
-            position.collateralAsset
-        );
+        uint256 effectiveRatio = registry.getEffectiveCollateralRatio(position.syntheticAsset, position.collateralAsset);
 
         // Calculate current collateral ratio
         uint256 currentRatio = _calculateCollateralRatio(
-            position.syntheticAsset,
-            position.collateralAsset,
-            position.collateralAmount,
-            position.mintedAmount
+            position.syntheticAsset, position.collateralAsset, position.collateralAmount, position.mintedAmount
         );
 
-        require(
-            currentRatio < effectiveRatio,
-            "Position is not under-collateralized"
-        );
+        require(currentRatio < effectiveRatio, "Position is not under-collateralized");
 
         // burn synthetic asset from liquidator
-        SyntheticAsset(position.syntheticAsset).burn(
-            msg.sender,
-            position.mintedAmount
-        );
+        SyntheticAsset(position.syntheticAsset).burn(msg.sender, position.mintedAmount);
 
         // Calculate auction discount
-        uint256 auctionDiscount = registry.getAuctionDiscount(
-            position.syntheticAsset
-        );
+        uint256 auctionDiscount = registry.getAuctionDiscount(position.syntheticAsset);
 
         // Calculate collateral to give to liquidator
         // Liquidator gets: (mintedAmount * (1 + auctionDiscount / 10000)) worth of collateral
@@ -522,8 +411,7 @@ contract PositionManager is Ownable {
         }
 
         // Calculate remaining collateral
-        uint256 remainingCollateral = position.collateralAmount -
-            collateralToLiquidator;
+        uint256 remainingCollateral = position.collateralAmount - collateralToLiquidator;
 
         // Calculate fee on remaining collateral
         uint256 fee = 0;
@@ -532,25 +420,16 @@ contract PositionManager is Ownable {
         }
 
         // Transfer collateral to liquidator
-        IERC20(position.collateralAsset).safeTransfer(
-            msg.sender,
-            collateralToLiquidator
-        );
+        IERC20(position.collateralAsset).safeTransfer(msg.sender, collateralToLiquidator);
 
         // Transfer fee to fee collector
         if (fee > 0) {
-            IERC20(position.collateralAsset).safeTransfer(
-                registry.feeCollector(),
-                fee
-            );
+            IERC20(position.collateralAsset).safeTransfer(registry.feeCollector(), fee);
         }
 
         // Transfer remaining collateral to position owner
         if (remainingCollateral > fee) {
-            IERC20(position.collateralAsset).safeTransfer(
-                position.owner,
-                remainingCollateral - fee
-            );
+            IERC20(position.collateralAsset).safeTransfer(position.owner, remainingCollateral - fee);
         }
 
         // Close position
@@ -568,9 +447,7 @@ contract PositionManager is Ownable {
      * @return isUnderCollateralized Whether the position is under-collateralized
      * @notice Used to determine if a position can be liquidated
      */
-    function isUnderCollateralized(
-        uint256 positionId
-    ) external view returns (bool) {
+    function isUnderCollateralized(uint256 positionId) external view returns (bool) {
         Position storage position = positions[positionId];
 
         if (!position.isActive || position.mintedAmount == 0) {
@@ -578,17 +455,11 @@ contract PositionManager is Ownable {
         }
 
         // Get effective collateral ratio
-        uint256 effectiveRatio = registry.getEffectiveCollateralRatio(
-            position.syntheticAsset,
-            position.collateralAsset
-        );
+        uint256 effectiveRatio = registry.getEffectiveCollateralRatio(position.syntheticAsset, position.collateralAsset);
 
         // Calculate current collateral ratio
         uint256 currentRatio = _calculateCollateralRatio(
-            position.syntheticAsset,
-            position.collateralAsset,
-            position.collateralAmount,
-            position.mintedAmount
+            position.syntheticAsset, position.collateralAsset, position.collateralAmount, position.mintedAmount
         );
 
         return currentRatio < effectiveRatio;
@@ -600,21 +471,15 @@ contract PositionManager is Ownable {
      * @return collateralRatio The position's collateral ratio (scaled by 10000)
      * @notice 15000 represents a 150% collateralization ratio
      */
-    function getCollateralRatio(
-        uint256 positionId
-    ) external view returns (uint256) {
+    function getCollateralRatio(uint256 positionId) external view returns (uint256) {
         Position storage position = positions[positionId];
 
         require(position.isActive, "Position not active");
         require(position.mintedAmount > 0, "No debt");
 
-        return
-            _calculateCollateralRatio(
-                position.syntheticAsset,
-                position.collateralAsset,
-                position.collateralAmount,
-                position.mintedAmount
-            );
+        return _calculateCollateralRatio(
+            position.syntheticAsset, position.collateralAsset, position.collateralAmount, position.mintedAmount
+        );
     }
 
     /**
@@ -626,49 +491,37 @@ contract PositionManager is Ownable {
      * @notice Takes into account the effective collateral ratio, which includes
      *         both the asset's minimum ratio and the collateral's risk multiplier
      */
-    function _calculateRequiredCollateral(
-        address syntheticAsset,
-        address collateralAsset,
-        uint256 mintAmount
-    ) internal view returns (uint256) {
+    function _calculateRequiredCollateral(address syntheticAsset, address collateralAsset, uint256 mintAmount)
+        internal
+        view
+        returns (uint256)
+    {
         if (mintAmount == 0) {
             return 0;
         }
 
         // Get effective collateral ratio
-        uint256 effectiveRatio = registry.getEffectiveCollateralRatio(
-            syntheticAsset,
-            collateralAsset
-        );
+        uint256 effectiveRatio = registry.getEffectiveCollateralRatio(syntheticAsset, collateralAsset);
 
         // Get token decimals
         uint8 syntheticDecimals = ERC20(syntheticAsset).decimals();
         uint8 collateralDecimals = ERC20(collateralAsset).decimals();
 
         // Calculate the USD value of the minted amount
-        uint256 mintedUsdValue = registry.oracle().getUsdValue(
-            syntheticAsset,
-            mintAmount,
-            syntheticDecimals
-        );
+        uint256 mintedUsdValue = registry.oracle().getUsdValue(syntheticAsset, mintAmount, syntheticDecimals);
 
         // Calculate the required collateral value in USD
-        uint256 requiredCollateralUsdValue = (mintedUsdValue * effectiveRatio) /
-            10000;
+        uint256 requiredCollateralUsdValue = (mintedUsdValue * effectiveRatio) / 10000;
 
         // Convert the USD value to collateral tokens
         // This is simplified and assumes 1:1 conversion based on price
-        (int64 collateralPrice, , ) = registry.oracle().getPrice(
-            collateralAsset
-        );
+        (int64 collateralPrice,,) = registry.oracle().getPrice(collateralAsset);
         require(collateralPrice > 0, "Invalid collateral price");
 
         uint256 positiveCollateralPrice = uint256(uint64(collateralPrice));
 
         // Calculate required collateral: (requiredCollateralUsdValue * 10^collateralDecimals) / collateralPrice
-        return
-            (requiredCollateralUsdValue * (10 ** collateralDecimals)) /
-            positiveCollateralPrice;
+        return (requiredCollateralUsdValue * (10 ** collateralDecimals)) / positiveCollateralPrice;
     }
 
     /**
@@ -680,11 +533,11 @@ contract PositionManager is Ownable {
      * @notice Used during liquidations to determine how much collateral
      *         the liquidator should receive
      */
-    function _calculateCollateralValue(
-        address syntheticAsset,
-        address collateralAsset,
-        uint256 syntheticAmount
-    ) internal view returns (uint256) {
+    function _calculateCollateralValue(address syntheticAsset, address collateralAsset, uint256 syntheticAmount)
+        internal
+        view
+        returns (uint256)
+    {
         if (syntheticAmount == 0) {
             return 0;
         }
@@ -694,10 +547,8 @@ contract PositionManager is Ownable {
         uint8 collateralDecimals = ERC20(collateralAsset).decimals();
 
         // Get prices
-        (int64 syntheticPrice, , ) = registry.oracle().getPrice(syntheticAsset);
-        (int64 collateralPrice, , ) = registry.oracle().getPrice(
-            collateralAsset
-        );
+        (int64 syntheticPrice,,) = registry.oracle().getPrice(syntheticAsset);
+        (int64 collateralPrice,,) = registry.oracle().getPrice(collateralAsset);
 
         require(syntheticPrice > 0, "Invalid synthetic price");
         require(collateralPrice > 0, "Invalid collateral price");
@@ -716,9 +567,7 @@ contract PositionManager is Ownable {
         }
 
         // Convert to collateral amount: (syntheticValue * 10^collateralDecimals) / collateralPrice
-        return
-            (syntheticValue * (10 ** collateralDecimals)) /
-            positiveCollateralPrice;
+        return (syntheticValue * (10 ** collateralDecimals)) / positiveCollateralPrice;
     }
 
     /**
@@ -750,18 +599,11 @@ contract PositionManager is Ownable {
         uint8 collateralDecimals = ERC20(collateralAsset).decimals();
 
         // Calculate the USD value of the collateral
-        uint256 collateralUsdValue = registry.oracle().getUsdValue(
-            collateralAsset,
-            collateralAmount,
-            collateralDecimals
-        );
+        uint256 collateralUsdValue =
+            registry.oracle().getUsdValue(collateralAsset, collateralAmount, collateralDecimals);
 
         // Calculate the USD value of the minted amount
-        uint256 mintedUsdValue = registry.oracle().getUsdValue(
-            syntheticAsset,
-            mintedAmount,
-            syntheticDecimals
-        );
+        uint256 mintedUsdValue = registry.oracle().getUsdValue(syntheticAsset, mintedAmount, syntheticDecimals);
 
         // Calculate the collateral ratio: (collateralUsdValue * 10000) / mintedUsdValue
         return (collateralUsdValue * 10000) / mintedUsdValue;
@@ -772,9 +614,7 @@ contract PositionManager is Ownable {
      * @param user The address of the user
      * @return count The number of positions
      */
-    function getUserPositionCount(
-        address user
-    ) external view returns (uint256) {
+    function getUserPositionCount(address user) external view returns (uint256) {
         return userPositions[user].length;
     }
 
@@ -783,9 +623,7 @@ contract PositionManager is Ownable {
      * @param syntheticAsset The address of the synthetic asset
      * @return count The number of positions
      */
-    function getAssetPositionCount(
-        address syntheticAsset
-    ) external view returns (uint256) {
+    function getAssetPositionCount(address syntheticAsset) external view returns (uint256) {
         return assetPositions[syntheticAsset].length;
     }
 
@@ -801,9 +639,7 @@ contract PositionManager is Ownable {
      * @return isActive The status of the position (active/inactive)
      * @notice Returns full details about a specific position
      */
-    function getPosition(
-        uint256 positionId
-    )
+    function getPosition(uint256 positionId)
         external
         view
         returns (

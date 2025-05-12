@@ -65,10 +65,7 @@ contract OracleInterface {
     function registerPriceFeed(address asset, bytes32 feedId) external {
         require(asset != address(0), "Invalid asset address");
         require(feedId != bytes32(0), "Invalid feed ID");
-        require(
-            priceFeedIds[asset] == bytes32(0),
-            "Price feed already registered"
-        );
+        require(priceFeedIds[asset] == bytes32(0), "Price feed already registered");
 
         priceFeedIds[asset] = feedId;
 
@@ -83,10 +80,7 @@ contract OracleInterface {
      * @notice The fee is determined by the Pyth Network based on the update data
      * @notice This function should be called regularly to keep prices up-to-date
      */
-    function updatePrice(
-        address asset,
-        bytes[] calldata updateData
-    ) external payable {
+    function updatePrice(address asset, bytes[] calldata updateData) external payable {
         bytes32 feedId = priceFeedIds[asset];
         require(feedId != bytes32(0), "Price feed not registered");
 
@@ -107,9 +101,7 @@ contract OracleInterface {
      * @return timestamp The timestamp of the price
      * @return decimals The number of decimals in the price
      */
-    function getPrice(
-        address asset
-    ) external view returns (int64 price, uint256 timestamp, int32 decimals) {
+    function getPrice(address asset) external view returns (int64 price, uint256 timestamp, int32 decimals) {
         bytes32 feedId = priceFeedIds[asset];
         require(feedId != bytes32(0), "Price feed not registered");
 
@@ -117,10 +109,7 @@ contract OracleInterface {
         PythStructs.Price memory pythPrice = pyth.getPrice(feedId);
 
         // Check if price is stale
-        require(
-            block.timestamp - pythPrice.publishTime <= MAX_PRICE_AGE,
-            "Price is stale"
-        );
+        require(block.timestamp - pythPrice.publishTime <= MAX_PRICE_AGE, "Price is stale");
 
         return (pythPrice.price, pythPrice.publishTime, pythPrice.expo);
     }
@@ -141,12 +130,8 @@ contract OracleInterface {
      * @param assetDecimals The number of decimals in the asset
      * @return value The USD value of the tokens (scaled by 10^18)
      */
-    function getUsdValue(
-        address asset,
-        uint256 amount,
-        uint8 assetDecimals
-    ) external view returns (uint256 value) {
-        (int64 price, , int32 priceExpo) = this.getPrice(asset);
+    function getUsdValue(address asset, uint256 amount, uint8 assetDecimals) external view returns (uint256 value) {
+        (int64 price,, int32 priceExpo) = this.getPrice(asset);
         require(price > 0, "Invalid price");
 
         // Convert price to positive (safe because we checked price > 0)

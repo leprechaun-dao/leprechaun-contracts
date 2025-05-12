@@ -24,15 +24,8 @@ contract SyntheticAsset is ERC20 {
      * @param _positionManager The address of the position manager contract that will have
      *        exclusive permission to mint and burn tokens
      */
-    constructor(
-        string memory name_,
-        string memory symbol_,
-        address _positionManager
-    ) ERC20(name_, symbol_) {
-        require(
-            _positionManager != address(0),
-            "Invalid position manager address"
-        );
+    constructor(string memory name_, string memory symbol_, address _positionManager) ERC20(name_, symbol_) {
+        require(_positionManager != address(0), "Invalid position manager address");
         positionManager = _positionManager;
     }
 
@@ -44,10 +37,7 @@ contract SyntheticAsset is ERC20 {
      * @notice This function is called when users create or expand positions in the protocol
      */
     function mint(address to, uint256 amount) external {
-        require(
-            msg.sender == positionManager,
-            "Only position manager can mint"
-        );
+        require(msg.sender == positionManager, "Only position manager can mint");
 
         _mint(to, amount);
     }
@@ -60,10 +50,7 @@ contract SyntheticAsset is ERC20 {
      * @notice This function is called when users repay debt, close positions, or during liquidations
      */
     function burn(address from, uint256 amount) external {
-        require(
-            msg.sender == positionManager,
-            "Only position manager can burn"
-        );
+        require(msg.sender == positionManager, "Only position manager can burn");
 
         _burn(from, amount);
     }
