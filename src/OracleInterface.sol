@@ -27,7 +27,7 @@ contract OracleInterface {
      * @dev Maximum allowed age for price data in seconds
      *      Prices older than this threshold are considered stale and will be rejected
      */
-    uint256 public constant MAX_PRICE_AGE = 60; // 60 seconds
+    uint256 public constant MAX_PRICE_AGE = 3600; // 1 hour
 
     // Events
     /**
@@ -73,28 +73,6 @@ contract OracleInterface {
     }
 
     /**
-     * @dev Update price for a specific asset using Pyth price update data
-     * @param asset The address of the asset
-     * @param updateData The Pyth price update data (obtained from Pyth Network)
-     * @notice This function requires payment of a fee to the Pyth Network
-     * @notice The fee is determined by the Pyth Network based on the update data
-     * @notice This function should be called regularly to keep prices up-to-date
-     */
-    function updatePrice(address asset, bytes[] calldata updateData) external payable {
-        bytes32 feedId = priceFeedIds[asset];
-        require(feedId != bytes32(0), "Price feed not registered");
-
-        // Update the price feed with the provided update data
-        uint256 fee = pyth.getUpdateFee(updateData);
-        pyth.updatePriceFeeds{value: fee}(updateData);
-
-        // Get the updated price
-        PythStructs.Price memory price = pyth.getPrice(feedId);
-
-        emit PriceUpdated(asset, price.price, price.publishTime);
-    }
-
-    /**
      * @dev Get the latest price for an asset
      * @param asset The address of the asset
      * @return price The price in USD (scaled by 10^8)
@@ -105,11 +83,9 @@ contract OracleInterface {
         bytes32 feedId = priceFeedIds[asset];
         require(feedId != bytes32(0), "Price feed not registered");
 
-        // Get the price from Pyth
-        PythStructs.Price memory pythPrice = pyth.getPrice(feedId);
-
-        // Check if price is stale
-        require(block.timestamp - pythPrice.publishTime <= MAX_PRICE_AGE, "Price is stale");
+        // Get the price from Pyth using the recommended method with MAX_PRICE_AGE
+        // This will revert with StalePrice error if the price is older than MAX_PRICE_AGE
+        PythStructs.Price memory pythPrice = pyth.getPriceNoOlderThan(feedId, block.timestamp - MAX_PRICE_AGE);
 
         return (pythPrice.price, pythPrice.publishTime, pythPrice.expo);
     }
