@@ -7,37 +7,73 @@ import "./LeprechaunFactory.sol";
 /**
  * @title PositionManager
  * @dev Manages collateralized debt positions (CDPs) for synthetic assets
+ *      This contract is the core of the Leprechaun protocol, allowing users to:
+ *      - Create positions with collateral to mint synthetic assets
+ *      - Manage collateral (deposit/withdraw) and debt (mint/burn)
+ *      - Close positions
+ *      - Liquidate under-collateralized positions
+ *      The contract maintains strict collateralization rules enforced by the protocol parameters
+ *      stored in the LeprechaunFactory.
  */
 contract PositionManager is Ownable {
     using SafeERC20 for IERC20;
 
-    // Protocol registry
+    /**
+     * @dev Reference to the protocol registry that stores all configuration parameters
+     *      This includes synthetic assets, collateral types, and their relationships
+     */
     LeprechaunFactory public registry;
 
-    // Struct to represent a CDP
+    /**
+     * @dev Struct representing a Collateralized Debt Position (CDP)
+     * @param owner The address that owns and can manage this position
+     * @param syntheticAsset The address of the synthetic asset token being minted
+     * @param collateralAsset The address of the token used as collateral
+     * @param collateralAmount The amount of collateral deposited in the position
+     * @param mintedAmount The amount of synthetic asset that has been minted (debt)
+     * @param lastUpdateTimestamp The timestamp of the last modification to this position
+     * @param isActive Whether the position is currently active or has been closed
+     */
     struct Position {
-        address owner; // Position owner
-        address syntheticAsset; // Synthetic asset address
-        address collateralAsset; // Collateral asset address
-        uint256 collateralAmount; // Amount of collateral deposited
-        uint256 mintedAmount; // Amount of synthetic asset minted
-        uint256 lastUpdateTimestamp; // Last update timestamp
-        bool isActive; // Whether the position is active
+        address owner;
+        address syntheticAsset;
+        address collateralAsset;
+        uint256 collateralAmount;
+        uint256 mintedAmount;
+        uint256 lastUpdateTimestamp;
+        bool isActive;
     }
 
-    // Mapping of position IDs to positions
+    /**
+     * @dev Mapping of position IDs to positions
+     *      Each position has a unique ID starting from 1
+     */
     mapping(uint256 => Position) public positions;
 
-    // Next position ID
+    /**
+     * @dev Counter for the next position ID to be assigned
+     */
     uint256 public nextPositionId = 1;
 
-    // Mapping of user address to their position IDs
+    /**
+     * @dev Mapping of user address to their position IDs
+     */
     mapping(address => uint256[]) public userPositions;
 
-    // Mapping of synthetic asset to position IDs
+    /**
+     * @dev Mapping of synthetic asset to position IDs
+     */
     mapping(address => uint256[]) public assetPositions;
 
-    // Events
+    /**
+     * @dev Emitted when a new position is created
+     * @param positionId The unique ID of the new position
+     * @param owner The address that created and owns the position
+     * @param syntheticAsset The synthetic asset token address
+     * @param collateralAsset The collateral token address
+     * @param collateralAmount The amount of collateral deposited
+     * @param mintedAmount The amount of synthetic asset minted
+     */
     event PositionCreated(
         uint256 indexed positionId,
         address indexed owner,
@@ -47,12 +83,25 @@ contract PositionManager is Ownable {
         uint256 mintedAmount
     );
 
+    /**
+     * @dev Emitted when additional collateral is deposited to a position
+     * @param positionId The ID of the position
+     * @param amount The amount of additional collateral deposited
+     * @param newCollateralAmount The new total collateral amount after deposit
+     */
     event CollateralDeposited(
         uint256 indexed positionId,
         uint256 amount,
         uint256 newCollateralAmount
     );
 
+    /**
+     * @dev Emitted when collateral is withdrawn from a position
+     * @param positionId The ID of the position
+     * @param amount The amount of collateral withdrawn
+     * @param fee The protocol fee charged for the withdrawal
+     * @param newCollateralAmount The new total collateral amount after withdrawal
+     */
     event CollateralWithdrawn(
         uint256 indexed positionId,
         uint256 amount,
@@ -60,20 +109,41 @@ contract PositionManager is Ownable {
         uint256 newCollateralAmount
     );
 
+    /**
+     * @dev Emitted when additional synthetic asset is minted from a position
+     * @param positionId The ID of the position
+     * @param amount The amount of synthetic asset minted
+     * @param newMintedAmount The new total minted amount after the operation
+     */
     event SyntheticAssetMinted(
         uint256 indexed positionId,
         uint256 amount,
         uint256 newMintedAmount
     );
 
+    /**
+     * @dev Emitted when synthetic asset is burned to reduce position debt
+     * @param positionId The ID of the position
+     * @param amount The amount of synthetic asset burned
+     * @param newMintedAmount The new total minted amount after the operation
+     */
     event SyntheticAssetBurned(
         uint256 indexed positionId,
         uint256 amount,
         uint256 newMintedAmount
     );
 
+    /**
+     * @dev Emitted when a position is closed
+     * @param positionId The ID of the closed position
+     */
     event PositionClosed(uint256 indexed positionId);
 
+    /**
+     * @dev Emitted when a position liquidation is started
+     * @param positionId The ID of the position being liquidated
+     * @param liquidator The address that initiated the liquidation
+     */
     event LiquidationStarted(
         uint256 indexed positionId,
         address indexed liquidator
@@ -81,8 +151,9 @@ contract PositionManager is Ownable {
 
     /**
      * @dev Constructor
-     * @param _registry The address of the protocol registry
-     * @param initialOwner The initial owner of the contract
+     * @param _registry The address of the protocol registry (LeprechaunFactory)
+     * @param _oracle The address of the oracle contract for price feeds
+     * @param initialOwner The address that will own this contract
      */
     constructor(
         address _registry,
@@ -97,11 +168,14 @@ contract PositionManager is Ownable {
 
     /**
      * @dev Create a new CDP
-     * @param syntheticAsset The address of the synthetic asset
-     * @param collateralAsset The address of the collateral asset
+     * @param syntheticAsset The address of the synthetic asset to mint
+     * @param collateralAsset The address of the collateral asset to deposit
      * @param collateralAmount The amount of collateral to deposit
      * @param mintAmount The amount of synthetic asset to mint
      * @return positionId The ID of the created position
+     * @notice Creates a new position, transfers collateral from the user,
+     *         and mints the synthetic asset to the user
+     * @notice Collateral must be sufficient based on the protocol's requirements
      */
     function createPosition(
         address syntheticAsset,
@@ -188,6 +262,8 @@ contract PositionManager is Ownable {
      * @dev Deposit additional collateral to a position
      * @param positionId The ID of the position
      * @param amount The amount of collateral to deposit
+     * @notice Increases the position's collateralization ratio
+     * @notice The position must be active and owned by the caller
      */
     function depositCollateral(uint256 positionId, uint256 amount) external {
         Position storage position = positions[positionId];
@@ -215,6 +291,10 @@ contract PositionManager is Ownable {
      * @dev Withdraw collateral from a position
      * @param positionId The ID of the position
      * @param amount The amount of collateral to withdraw
+     * @notice Decreases the position's collateralization ratio
+     * @notice The position must be active, owned by the caller, and
+     *         remain sufficiently collateralized after withdrawal
+     * @notice A protocol fee is applied to the withdrawn amount
      */
     function withdrawCollateral(uint256 positionId, uint256 amount) external {
         Position storage position = positions[positionId];
@@ -274,6 +354,9 @@ contract PositionManager is Ownable {
      * @dev Mint additional synthetic asset from a position
      * @param positionId The ID of the position
      * @param amount The amount of synthetic asset to mint
+     * @notice Increases the position's debt
+     * @notice The position must be active, owned by the caller, and
+     *         have sufficient collateral to support the additional debt
      */
     function mintSyntheticAsset(uint256 positionId, uint256 amount) external {
         Position storage position = positions[positionId];
@@ -311,6 +394,8 @@ contract PositionManager is Ownable {
      * @dev Burn synthetic asset to reduce a position's debt
      * @param positionId The ID of the position
      * @param amount The amount of synthetic asset to burn
+     * @notice Decreases the position's debt and improves the collateralization ratio
+     * @notice The position must be active and owned by the caller
      */
     function burnSyntheticAsset(uint256 positionId, uint256 amount) external {
         Position storage position = positions[positionId];
@@ -336,6 +421,9 @@ contract PositionManager is Ownable {
     /**
      * @dev Close a position
      * @param positionId The ID of the position
+     * @notice Burns all remaining debt, charges a protocol fee on the collateral,
+     *         and returns the remaining collateral to the position owner
+     * @notice The position must be active and owned by the caller
      */
     function closePosition(uint256 positionId) external {
         Position storage position = positions[positionId];
@@ -380,6 +468,10 @@ contract PositionManager is Ownable {
     /**
      * @dev Liquidate an under-collateralized position
      * @param positionId The ID of the position
+     * @notice Any user can liquidate an under-collateralized position
+     * @notice The liquidator must have enough synthetic asset to cover the position's debt
+     * @notice The liquidator receives collateral at a discount (auction discount)
+     * @notice Any remaining collateral (after fees) is returned to the position owner
      */
     function liquidate(uint256 positionId) external {
         Position storage position = positions[positionId];
@@ -474,6 +566,7 @@ contract PositionManager is Ownable {
      * @dev Check if a position is under-collateralized
      * @param positionId The ID of the position
      * @return isUnderCollateralized Whether the position is under-collateralized
+     * @notice Used to determine if a position can be liquidated
      */
     function isUnderCollateralized(
         uint256 positionId
@@ -505,6 +598,7 @@ contract PositionManager is Ownable {
      * @dev Get a position's collateral ratio
      * @param positionId The ID of the position
      * @return collateralRatio The position's collateral ratio (scaled by 10000)
+     * @notice 15000 represents a 150% collateralization ratio
      */
     function getCollateralRatio(
         uint256 positionId
@@ -529,6 +623,8 @@ contract PositionManager is Ownable {
      * @param collateralAsset The address of the collateral asset
      * @param mintAmount The amount of synthetic asset
      * @return requiredCollateral The required collateral amount
+     * @notice Takes into account the effective collateral ratio, which includes
+     *         both the asset's minimum ratio and the collateral's risk multiplier
      */
     function _calculateRequiredCollateral(
         address syntheticAsset,
@@ -580,7 +676,9 @@ contract PositionManager is Ownable {
      * @param syntheticAsset The address of the synthetic asset
      * @param collateralAsset The address of the collateral asset
      * @param syntheticAmount The amount of synthetic asset
-     * @return collateralAmount The required collateral amount
+     * @return collateralAmount The equivalent collateral amount
+     * @notice Used during liquidations to determine how much collateral
+     *         the liquidator should receive
      */
     function _calculateCollateralValue(
         address syntheticAsset,
@@ -630,6 +728,8 @@ contract PositionManager is Ownable {
      * @param collateralAmount The amount of collateral
      * @param mintedAmount The amount of synthetic asset minted
      * @return collateralRatio The collateral ratio (scaled by 10000)
+     * @notice Returns the current collateralization ratio of a position
+     * @notice A ratio of 15000 means 150% collateralization
      */
     function _calculateCollateralRatio(
         address syntheticAsset,
@@ -699,6 +799,7 @@ contract PositionManager is Ownable {
      * @return mintedAmount The amount of synthetic asset minted
      * @return lastUpdateTimestamp The last time the position was updated
      * @return isActive The status of the position (active/inactive)
+     * @notice Returns full details about a specific position
      */
     function getPosition(
         uint256 positionId

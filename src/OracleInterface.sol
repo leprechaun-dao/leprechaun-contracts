@@ -6,24 +6,49 @@ import "./interfaces/PythStructs.sol";
 
 /**
  * @title OracleInterface
- * @dev Interface for oracle price feeds (using Pyth)
+ * @dev Interface for oracle price feeds using the Pyth Network
+ *      This contract provides a standardized way to access price data for both
+ *      synthetic assets and collateral types in the Leprechaun protocol.
+ *      It handles price feed registration, updates, and value conversion
+ *      while enforcing maximum staleness requirements for price data.
  */
 contract OracleInterface {
+    /**
+     * @dev Reference to the Pyth Network contract that provides price data
+     */
     IPyth public pyth;
 
-    // Mapping of asset address to Pyth price feed ID
+    /**
+     * @dev Mapping of asset addresses to their corresponding Pyth price feed IDs
+     */
     mapping(address => bytes32) public priceFeedIds;
 
-    // Maximum price staleness (in seconds)
-    uint256 public constant MAX_PRICE_AGE = 60;
+    /**
+     * @dev Maximum allowed age for price data in seconds
+     *      Prices older than this threshold are considered stale and will be rejected
+     */
+    uint256 public constant MAX_PRICE_AGE = 60; // 60 seconds
 
     // Events
+    /**
+     * @dev Emitted when a new price feed is registered for an asset
+     * @param asset The address of the asset (synthetic or collateral)
+     * @param feedId The Pyth price feed ID assigned to the asset
+     */
     event PriceFeedRegistered(address indexed asset, bytes32 feedId);
+
+    /**
+     * @dev Emitted when a price is updated for an asset
+     * @param asset The address of the asset
+     * @param price The new price value (scaled by 10^8)
+     * @param timestamp The timestamp when the price was published
+     */
     event PriceUpdated(address indexed asset, int64 price, uint256 timestamp);
 
     /**
      * @dev Constructor
-     * @param _pythAddress The address of the Pyth contract
+     * @param _pythAddress The address of the Pyth contract on the current chain
+     * @notice Initializes the oracle interface with a connection to the Pyth Network
      */
     constructor(address _pythAddress) {
         require(_pythAddress != address(0), "Invalid Pyth address");
@@ -32,8 +57,10 @@ contract OracleInterface {
 
     /**
      * @dev Register a price feed for an asset
-     * @param asset The address of the asset
-     * @param feedId The Pyth price feed ID
+     * @param asset The address of the asset (synthetic or collateral)
+     * @param feedId The Pyth price feed ID for the asset's price data
+     * @notice Only one price feed can be registered per asset
+     * @notice This function is called by the LeprechaunFactory when registering new assets
      */
     function registerPriceFeed(address asset, bytes32 feedId) external {
         require(asset != address(0), "Invalid asset address");
@@ -51,7 +78,10 @@ contract OracleInterface {
     /**
      * @dev Update price for a specific asset using Pyth price update data
      * @param asset The address of the asset
-     * @param updateData The Pyth price update data
+     * @param updateData The Pyth price update data (obtained from Pyth Network)
+     * @notice This function requires payment of a fee to the Pyth Network
+     * @notice The fee is determined by the Pyth Network based on the update data
+     * @notice This function should be called regularly to keep prices up-to-date
      */
     function updatePrice(
         address asset,

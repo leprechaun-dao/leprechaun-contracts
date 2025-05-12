@@ -7,83 +7,180 @@ import "./OracleInterface.sol";
 import "./SyntheticAsset.sol";
 
 /**
- * @title LeprechaunRegistry
- * @dev Manages the registration of synthetic assets and their parameters
+ * @title LeprechaunFactory
+ * @dev Manages the registration and configuration of synthetic assets and collateral types
+ *      This contract serves as the central registry for the protocol, storing all parameters
+ *      related to synthetic assets, collateral types, and their relationships.
  */
 contract LeprechaunFactory is Ownable {
-    // Struct to hold synthetic asset parameters
+    /**
+     * @dev Struct containing all parameters for a synthetic asset
+     * @param tokenAddress The address of the synthetic token contract
+     * @param name The human-readable name of the synthetic asset (e.g., "Gold Index")
+     * @param symbol The trading symbol of the synthetic asset (e.g., "sGOLD")
+     * @param minCollateralRatio The minimum collateral ratio required (150% = 15000, scaled by 10000)
+     * @param auctionDiscount The discount applied during liquidation auctions (20% = 2000, scaled by 10000)
+     * @param isActive Whether the asset is currently active and can be used in the protocol
+     */
     struct SyntheticAssetInfo {
-        address tokenAddress; // The address of the synthetic token
-        string name; // The name of the synthetic asset (e.g., "Gold Index")
-        string symbol; // The symbol of the synthetic asset (e.g., "sGOLD")
-        uint256 minCollateralRatio; // Minimum collateral ratio (150% = 15000)
-        uint256 auctionDiscount; // Auction discount for liquidations (20% = 2000)
-        bool isActive; // Whether the asset is active
+        address tokenAddress;
+        string name;
+        string symbol;
+        uint256 minCollateralRatio;
+        uint256 auctionDiscount;
+        bool isActive;
     }
 
-    // Struct to hold collateral parameters
+    /**
+     * @dev Struct containing all parameters for a collateral type
+     * @param tokenAddress The address of the collateral token contract
+     * @param multiplier The risk multiplier applied to this collateral (e.g., 1.33x = 13300, scaled by 10000)
+     *        Higher values indicate higher risk and require higher collateralization
+     * @param isActive Whether the collateral is currently active and can be used in the protocol
+     */
     struct CollateralType {
-        address tokenAddress; // The address of the collateral token
-        uint256 multiplier; // Collateral multiplier (e.g., 1.33x = 13300)
-        bool isActive; // Whether the collateral is active
+        address tokenAddress;
+        uint256 multiplier;
+        bool isActive;
     }
 
-    // Protocol-wide parameters
-    uint256 public protocolFee = 150; // 1.5% = 150 basis points
-    address public feeCollector; // Address where fees are sent
+    /**
+     * @dev Protocol fee in basis points (1.5% = 150 basis points)
+     *      Applied to various operations in the protocol
+     */
+    uint256 public protocolFee = 150;
 
-    // Mapping of synthetic assets by token address
+    /**
+     * @dev Address where protocol fees are sent
+     */
+    address public feeCollector;
+
+    /**
+     * @dev Mapping of synthetic asset information by token address
+     */
     mapping(address => SyntheticAssetInfo) public syntheticAssets;
-    // Mapping of synthetic assets by symbol
+
+    /**
+     * @dev Mapping of synthetic asset addresses by symbol for easy lookup
+     */
     mapping(string => address) public syntheticAssetsBySymbol;
-    // Array of all synthetic asset addresses
+
+    /**
+     * @dev Array of all synthetic asset addresses for enumeration
+     */
     address[] public allSyntheticAssets;
 
-    // Mapping of collateral types by token address
+    /**
+     * @dev Mapping of collateral type information by token address
+     */
     mapping(address => CollateralType) public collateralTypes;
-    // Array of all collateral addresses
+
+    /**
+     * @dev Array of all collateral addresses for enumeration
+     */
     address[] public allCollateralTypes;
 
-    // Mapping of allowed collateral for each synthetic asset
-    mapping(address => mapping(address => bool)) public allowedCollateral; // syntheticAsset => collateral => allowed
+    /**
+     * @dev Mapping of allowed collateral for each synthetic asset
+     *      syntheticAsset => collateral => allowed
+     */
+    mapping(address => mapping(address => bool)) public allowedCollateral;
 
-    // Oracle interface
+    /**
+     * @dev Oracle interface for price feeds
+     */
     OracleInterface public oracle;
 
-    // Events
+    /**
+     * @dev Emitted when a new synthetic asset is registered
+     * @param tokenAddress The address of the synthetic token
+     * @param symbol The symbol of the synthetic asset
+     */
     event SyntheticAssetRegistered(address indexed tokenAddress, string symbol);
+
+    /**
+     * @dev Emitted when a synthetic asset's parameters are updated
+     * @param tokenAddress The address of the synthetic token
+     */
     event SyntheticAssetUpdated(address indexed tokenAddress);
+
+    /**
+     * @dev Emitted when a synthetic asset is deactivated
+     * @param tokenAddress The address of the synthetic token
+     */
     event SyntheticAssetDeactivated(address indexed tokenAddress);
 
+    /**
+     * @dev Emitted when a new collateral type is registered
+     * @param tokenAddress The address of the collateral token
+     * @param multiplier The collateral multiplier
+     */
     event CollateralTypeRegistered(
         address indexed tokenAddress,
         uint256 multiplier
     );
+
+    /**
+     * @dev Emitted when a collateral type's parameters are updated
+     * @param tokenAddress The address of the collateral token
+     * @param multiplier The new collateral multiplier
+     */
     event CollateralTypeUpdated(
         address indexed tokenAddress,
         uint256 multiplier
     );
+
+    /**
+     * @dev Emitted when a collateral type is deactivated
+     * @param tokenAddress The address of the collateral token
+     */
     event CollateralTypeDeactivated(address indexed tokenAddress);
 
+    /**
+     * @dev Emitted when a collateral is allowed for a synthetic asset
+     * @param syntheticAsset The address of the synthetic asset
+     * @param collateral The address of the collateral
+     */
     event CollateralAllowedForAsset(
         address indexed syntheticAsset,
         address indexed collateral
     );
+
+    /**
+     * @dev Emitted when a collateral is disallowed for a synthetic asset
+     * @param syntheticAsset The address of the synthetic asset
+     * @param collateral The address of the collateral
+     */
     event CollateralDisallowedForAsset(
         address indexed syntheticAsset,
         address indexed collateral
     );
 
+    /**
+     * @dev Emitted when the protocol fee is updated
+     * @param newFee The new protocol fee in basis points
+     */
     event ProtocolFeeUpdated(uint256 newFee);
+
+    /**
+     * @dev Emitted when the fee collector address is updated
+     * @param newCollector The new fee collector address
+     */
     event FeeCollectorUpdated(address newCollector);
 
+    /**
+     * @dev Constructor
+     * @param initialOwner The address that will own this contract
+     * @param _feeCollector The address where protocol fees will be sent
+     * @param _oracle The address of the oracle contract for price feeds
+     */
     constructor(
         address initialOwner,
         address _feeCollector,
         address _oracle
     ) Ownable(initialOwner) {
         require(_oracle != address(0), "Invalid oracle address");
-        require(feeCollector != address(0), "Invalid feeCollector address");
+        require(_feeCollector != address(0), "Invalid feeCollector address");
 
         oracle = OracleInterface(_oracle);
         feeCollector = _feeCollector;
@@ -91,6 +188,12 @@ contract LeprechaunFactory is Ownable {
 
     /**
      * @dev Register a new synthetic asset
+     * @param name The name of the synthetic asset
+     * @param symbol The symbol of the synthetic asset
+     * @param minCollateralRatio The minimum collateral ratio (scaled by 10000)
+     * @param auctionDiscount The discount applied during liquidations (scaled by 10000)
+     * @param priceFeedId The ID of the price feed in the oracle
+     * @param positionManager The address of the position manager contract
      */
     function registerSyntheticAsset(
         string memory name,
@@ -120,8 +223,10 @@ contract LeprechaunFactory is Ownable {
             new SyntheticAsset(name, symbol, positionManager)
         );
 
+        // Register price feed for the new asset
         oracle.registerPriceFeed(tokenAddress, priceFeedId);
 
+        // Store asset information
         syntheticAssets[tokenAddress] = SyntheticAssetInfo({
             tokenAddress: tokenAddress,
             name: name,
@@ -138,6 +243,9 @@ contract LeprechaunFactory is Ownable {
 
     /**
      * @dev Update a synthetic asset's parameters
+     * @param tokenAddress The address of the synthetic asset token
+     * @param minCollateralRatio The new minimum collateral ratio (scaled by 10000)
+     * @param auctionDiscount The new auction discount for liquidations (scaled by 10000)
      */
     function updateSyntheticAsset(
         address tokenAddress,
@@ -162,6 +270,8 @@ contract LeprechaunFactory is Ownable {
 
     /**
      * @dev Deactivate a synthetic asset
+     * @param tokenAddress The address of the synthetic asset token
+     * @notice Once deactivated, no new positions can be created with this asset
      */
     function deactivateSyntheticAsset(address tokenAddress) external onlyOwner {
         require(
@@ -180,6 +290,10 @@ contract LeprechaunFactory is Ownable {
 
     /**
      * @dev Register a new collateral type
+     * @param tokenAddress The address of the collateral token
+     * @param multiplier The collateral multiplier (scaled by 10000)
+     * @param priceFeedId The ID of the price feed in the oracle
+     * @notice Higher multiplier values indicate higher risk and require more collateral
      */
     function registerCollateralType(
         address tokenAddress,
@@ -194,7 +308,10 @@ contract LeprechaunFactory is Ownable {
         require(multiplier >= 10000, "Multiplier must be at least 1x (10000)");
         require(priceFeedId != bytes32(0), "Invalid price feed id");
 
+        // Register price feed for the collateral
         oracle.registerPriceFeed(tokenAddress, priceFeedId);
+
+        // Store collateral information
         CollateralType memory collateral = CollateralType({
             tokenAddress: tokenAddress,
             multiplier: multiplier,
@@ -209,6 +326,8 @@ contract LeprechaunFactory is Ownable {
 
     /**
      * @dev Update a collateral type's parameters
+     * @param tokenAddress The address of the collateral token
+     * @param multiplier The new collateral multiplier (scaled by 10000)
      */
     function updateCollateralType(
         address tokenAddress,
@@ -227,6 +346,8 @@ contract LeprechaunFactory is Ownable {
 
     /**
      * @dev Deactivate a collateral type
+     * @param tokenAddress The address of the collateral token
+     * @notice Once deactivated, no new positions can be created with this collateral
      */
     function deactivateCollateralType(address tokenAddress) external onlyOwner {
         require(
@@ -244,7 +365,9 @@ contract LeprechaunFactory is Ownable {
     }
 
     /**
-     * @dev Allow a collateral type for a synthetic asset
+     * @dev Allow a collateral type to be used for a specific synthetic asset
+     * @param syntheticAsset The address of the synthetic asset
+     * @param collateralAddress The address of the collateral token
      */
     function allowCollateralForAsset(
         address syntheticAsset,
@@ -269,7 +392,10 @@ contract LeprechaunFactory is Ownable {
     }
 
     /**
-     * @dev Disallow a collateral type for a synthetic asset
+     * @dev Disallow a collateral type for a specific synthetic asset
+     * @param syntheticAsset The address of the synthetic asset
+     * @param collateralAddress The address of the collateral token
+     * @notice Existing positions with this collateral will not be affected
      */
     function disallowCollateralForAsset(
         address syntheticAsset,
@@ -287,6 +413,7 @@ contract LeprechaunFactory is Ownable {
 
     /**
      * @dev Update the protocol fee
+     * @param newFee The new protocol fee in basis points (e.g., 150 = 1.5%)
      */
     function updateProtocolFee(uint256 newFee) external onlyOwner {
         require(newFee <= 1000, "Fee cannot exceed 10%");
@@ -296,6 +423,7 @@ contract LeprechaunFactory is Ownable {
 
     /**
      * @dev Update the fee collector address
+     * @param newCollector The new address where protocol fees will be sent
      */
     function updateFeeCollector(address newCollector) external onlyOwner {
         require(newCollector != address(0), "Invalid fee collector address");
@@ -305,6 +433,10 @@ contract LeprechaunFactory is Ownable {
 
     /**
      * @dev Get the effective minimum collateral ratio for a synthetic asset and collateral type
+     * @param syntheticAsset The address of the synthetic asset
+     * @param collateralAddress The address of the collateral token
+     * @return The effective minimum collateral ratio (scaled by 10000)
+     * @notice This takes into account both the asset's minimum ratio and the collateral's risk multiplier
      */
     function getEffectiveCollateralRatio(
         address syntheticAsset,
@@ -334,6 +466,8 @@ contract LeprechaunFactory is Ownable {
 
     /**
      * @dev Check if a synthetic asset is active
+     * @param syntheticAsset The address of the synthetic asset
+     * @return Whether the synthetic asset is active
      */
     function isSyntheticAssetActive(
         address syntheticAsset
@@ -343,6 +477,8 @@ contract LeprechaunFactory is Ownable {
 
     /**
      * @dev Check if a collateral type is active
+     * @param collateralAddress The address of the collateral token
+     * @return Whether the collateral type is active
      */
     function isCollateralActive(
         address collateralAddress
@@ -352,6 +488,9 @@ contract LeprechaunFactory is Ownable {
 
     /**
      * @dev Get the auction discount for a synthetic asset
+     * @param syntheticAsset The address of the synthetic asset
+     * @return The auction discount (scaled by 10000)
+     * @notice This is the discount applied to the collateral during liquidations
      */
     function getAuctionDiscount(
         address syntheticAsset
@@ -361,6 +500,7 @@ contract LeprechaunFactory is Ownable {
 
     /**
      * @dev Get the number of registered synthetic assets
+     * @return The count of all registered synthetic assets
      */
     function getSyntheticAssetCount() external view returns (uint256) {
         return allSyntheticAssets.length;
@@ -368,6 +508,7 @@ contract LeprechaunFactory is Ownable {
 
     /**
      * @dev Get the number of registered collateral types
+     * @return The count of all registered collateral types
      */
     function getCollateralTypeCount() external view returns (uint256) {
         return allCollateralTypes.length;
