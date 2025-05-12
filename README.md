@@ -13,8 +13,6 @@ Leprechaun Protocol is a DeFi system that enables users to create synthetic asse
 - [Installation](#installation)
 - [Usage](#usage)
 - [Contract Architecture](#contract-architecture)
-- [Testing](#testing)
-- [Deployment](#deployment)
 - [Contributing](#contributing)
 - [License](#license)
 
