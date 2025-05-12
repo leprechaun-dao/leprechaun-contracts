@@ -61,11 +61,6 @@ contract LeprechaunFactory is Ownable {
     mapping(address => SyntheticAssetInfo) public syntheticAssets;
 
     /**
-     * @dev Mapping of synthetic asset addresses by symbol for easy lookup
-     */
-    mapping(string => address) public syntheticAssetsBySymbol;
-
-    /**
      * @dev Array of all synthetic asset addresses for enumeration
      */
     address[] public allSyntheticAssets;
@@ -188,7 +183,6 @@ contract LeprechaunFactory is Ownable {
         address positionManager
     ) external onlyOwner {
         require(bytes(symbol).length > 0, "Symbol cannot be empty");
-        require(syntheticAssetsBySymbol[symbol] == address(0), "Symbol already in use");
         require(positionManager != address(0), "Invalid position manager address");
         require(minCollateralRatio >= 10000, "Collateral ratio must be at least 100%");
         require(priceFeedId != bytes32(0), "Invalid price feed id");
@@ -208,7 +202,6 @@ contract LeprechaunFactory is Ownable {
             auctionDiscount: auctionDiscount,
             isActive: true
         });
-        syntheticAssetsBySymbol[symbol] = tokenAddress;
         allSyntheticAssets.push(tokenAddress);
 
         emit SyntheticAssetRegistered(tokenAddress, symbol);
