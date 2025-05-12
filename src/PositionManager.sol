@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "./ProtocolRegistry.sol";
+import "./LeprechaunFactory.sol";
 
 /**
  * @title PositionManager
@@ -12,7 +12,7 @@ contract PositionManager is Ownable {
     using SafeERC20 for IERC20;
 
     // Protocol registry
-    ProtocolRegistry public registry;
+    LeprechaunFactory public registry;
 
     // Struct to represent a CDP
     struct Position {
@@ -92,7 +92,7 @@ contract PositionManager is Ownable {
         require(_registry != address(0), "Invalid registry address");
         require(_oracle != address(0), "Invalid oracle address");
 
-        registry = ProtocolRegistry(_registry);
+        registry = LeprechaunFactory(_registry);
     }
 
     /**

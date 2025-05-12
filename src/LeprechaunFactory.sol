@@ -7,10 +7,10 @@ import "./OracleInterface.sol";
 import "./SyntheticAsset.sol";
 
 /**
- * @title ProtocolRegistry
+ * @title LeprechaunRegistry
  * @dev Manages the registration of synthetic assets and their parameters
  */
-contract ProtocolRegistry is Ownable {
+contract LeprechaunFactory is Ownable {
     // Struct to hold synthetic asset parameters
     struct SyntheticAssetInfo {
         address tokenAddress; // The address of the synthetic token

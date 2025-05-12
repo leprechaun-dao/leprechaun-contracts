@@ -114,24 +114,28 @@ contract OracleInterface {
     function getUsdValue(
         address asset,
         uint256 amount,
-        int32 assetDecimals
+        uint8 assetDecimals
     ) external view returns (uint256 value) {
-        (int64 price, , int32 priceDecimals) = this.getPrice(asset);
+        (int64 price, , int32 priceExpo) = this.getPrice(asset);
         require(price > 0, "Invalid price");
 
-        // Convert to positive (safe because we checked price > 0)
-        uint64 positivePrice = uint64(price);
+        // Convert price to positive (safe because we checked price > 0)
+        uint256 positivePrice = uint256(uint64(price));
 
-        // Calculate the USD value:
-        // value = amount * price * 10^(18 - assetDecimals + priceDecimals)
-        value = (amount * uint256(positivePrice));
+        // Calculate base value (amount * price)
+        value = amount * positivePrice;
 
-        // Adjust for decimals
-        if (assetDecimals > priceDecimals) {
-            value = value / (10 ** (assetDecimals - priceDecimals));
-        } else {
-            value = value * (10 ** (priceDecimals - assetDecimals));
+        // Adjust for price exponent
+        if (priceExpo != 0) {
+            if (priceExpo < 0) {
+                value = value / (10 ** uint256(uint32(-priceExpo)));
+            } else {
+                value = value * (10 ** uint256(uint32(priceExpo)));
+            }
         }
+
+        // Adjust for token decimals
+        value = value / (10 ** uint256(assetDecimals));
 
         return value;
     }
