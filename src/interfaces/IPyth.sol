@@ -12,62 +12,46 @@ interface IPyth {
      * @dev Get the price for a price feed
      * @param id The Pyth price feed ID
      */
-    function getPriceUnsafe(
-        bytes32 id
-    ) external view returns (PythStructs.Price memory);
+    function getPriceUnsafe(bytes32 id) external view returns (PythStructs.Price memory);
 
     /**
      * @dev Get the price for a price feed, ensuring the price is no more than maxAge seconds old
      * @param id The Pyth price feed ID
      */
-    function getPrice(
-        bytes32 id
-    ) external view returns (PythStructs.Price memory);
+    function getPrice(bytes32 id) external view returns (PythStructs.Price memory);
 
     /**
      * @dev Get the price for a price feed, ensuring the price is no more than age seconds old
      * @param id The Pyth price feed ID
      * @param age The maximum age of the price feed in seconds
      */
-    function getPriceNoOlderThan(
-        bytes32 id,
-        uint256 age
-    ) external view returns (PythStructs.Price memory);
+    function getPriceNoOlderThan(bytes32 id, uint256 age) external view returns (PythStructs.Price memory);
 
     /**
      * @dev Get the price for a price feed, ensuring the price is no more than age seconds old
      * @param id The Pyth price feed ID
      */
-    function getEmaPriceUnsafe(
-        bytes32 id
-    ) external view returns (PythStructs.Price memory);
+    function getEmaPriceUnsafe(bytes32 id) external view returns (PythStructs.Price memory);
 
     /**
      * @dev Get the price for a price feed, ensuring the price is no more than age seconds old
      * @param id The Pyth price feed ID
      */
-    function getEmaPrice(
-        bytes32 id
-    ) external view returns (PythStructs.Price memory);
+    function getEmaPrice(bytes32 id) external view returns (PythStructs.Price memory);
 
     /**
      * @dev Get the price for a price feed, ensuring the price is no more than age seconds old
      * @param id The Pyth price feed ID
      * @param age The maximum age of the price feed in seconds
      */
-    function getEmaPriceNoOlderThan(
-        bytes32 id,
-        uint256 age
-    ) external view returns (PythStructs.Price memory);
+    function getEmaPriceNoOlderThan(bytes32 id, uint256 age) external view returns (PythStructs.Price memory);
 
     /**
      * @dev Calculate the fee for updating price feeds
      * @param updateData The price update data
      * @return feeAmount The required fee in wei
      */
-    function getUpdateFee(
-        bytes[] calldata updateData
-    ) external view returns (uint256 feeAmount);
+    function getUpdateFee(bytes[] calldata updateData) external view returns (uint256 feeAmount);
 
     /**
      * @dev Update price feeds with the given update data
