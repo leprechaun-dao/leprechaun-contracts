@@ -13,7 +13,7 @@ fuzz_runs = 10000
 verbosity = 4
 
 [rpc_endpoints]
-base = "${BASE_RPC_URL}"
+base = "https://mainnet.base.org"
 
 [etherscan]
 base = { key = "${ETHERSCAN_API_KEY}" }

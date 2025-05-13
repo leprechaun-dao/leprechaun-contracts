@@ -7,13 +7,8 @@ import "./LeprechaunFactory.sol";
 /**
  * @title PositionManager
  * @dev Manages collateralized debt positions (CDPs) for synthetic assets
- *      This contract is the core of the Leprechaun protocol, allowing users to:
- *      - Create positions with collateral to mint synthetic assets
- *      - Manage collateral (deposit/withdraw) and debt (mint/burn)
- *      - Close positions
- *      - Liquidate under-collateralized positions
- *      The contract maintains strict collateralization rules enforced by the protocol parameters
- *      stored in the LeprechaunFactory.
+ *      This contract is the core of the Leprechaun protocol, handling position
+ *      creation, management, and liquidation with improved mathematical precision.
  */
 contract PositionManager is Ownable {
     using SafeERC20 for IERC20;
@@ -65,15 +60,7 @@ contract PositionManager is Ownable {
      */
     mapping(address => uint256[]) public assetPositions;
 
-    /**
-     * @dev Emitted when a new position is created
-     * @param positionId The unique ID of the new position
-     * @param owner The address that created and owns the position
-     * @param syntheticAsset The synthetic asset token address
-     * @param collateralAsset The collateral token address
-     * @param collateralAmount The amount of collateral deposited
-     * @param mintedAmount The amount of synthetic asset minted
-     */
+    // Events remain unchanged from the original contract
     event PositionCreated(
         uint256 indexed positionId,
         address indexed owner,
@@ -143,6 +130,107 @@ contract PositionManager is Ownable {
     }
 
     /**
+     * @dev Calculate the required collateral for a given amount of synthetic asset
+     * @param syntheticAsset The address of the synthetic asset
+     * @param collateralAsset The address of the collateral asset
+     * @param mintAmount The amount of synthetic asset to mint
+     * @return requiredCollateral The required collateral amount
+     * @notice Takes into account the effective collateral ratio, which includes
+     *         both the asset's minimum ratio and the collateral's risk multiplier
+     */
+    function _calculateRequiredCollateral(address syntheticAsset, address collateralAsset, uint256 mintAmount)
+        internal
+        view
+        returns (uint256)
+    {
+        if (mintAmount == 0) return 0;
+
+        // Get token decimals
+        uint8 syntheticDecimals = ERC20(syntheticAsset).decimals();
+        uint8 collateralDecimals = ERC20(collateralAsset).decimals();
+
+        // Get effective collateral ratio (e.g., 18000 for 180%)
+        uint256 effectiveRatio = registry.getEffectiveCollateralRatio(syntheticAsset, collateralAsset);
+
+        // Calculate synthetic asset USD value
+        uint256 syntheticUsdValue = registry.oracle().getUsdValue(syntheticAsset, mintAmount, syntheticDecimals);
+
+        // Calculate required USD value based on collateralization ratio
+        // effectiveRatio is scaled by 10000, so divide by 10000 to get the actual multiplier
+        uint256 requiredUsdValue = (syntheticUsdValue * effectiveRatio) / 10000;
+
+        // Convert USD value to collateral tokens
+        return registry.oracle().getTokenAmount(collateralAsset, requiredUsdValue, collateralDecimals);
+    }
+
+    /**
+     * @dev Calculate a position's collateral ratio
+     * @param syntheticAsset The address of the synthetic asset
+     * @param collateralAsset The address of the collateral asset
+     * @param collateralAmount The amount of collateral
+     * @param mintedAmount The amount of synthetic asset minted
+     * @return collateralRatio The collateral ratio (scaled by 10000)
+     * @notice Returns the current collateralization ratio of a position
+     * @notice A ratio of 15000 means 150% collateralization
+     */
+    function _calculateCollateralRatio(
+        address syntheticAsset,
+        address collateralAsset,
+        uint256 collateralAmount,
+        uint256 mintedAmount
+    ) internal view returns (uint256) {
+        if (mintedAmount == 0) {
+            return type(uint256).max; // Infinite ratio if no debt
+        }
+
+        if (collateralAmount == 0) {
+            return 0; // Zero ratio if no collateral
+        }
+
+        // Get token decimals
+        uint8 syntheticDecimals = ERC20(syntheticAsset).decimals();
+        uint8 collateralDecimals = ERC20(collateralAsset).decimals();
+
+        // Calculate the USD value of the collateral
+        uint256 collateralUsdValue =
+            registry.oracle().getUsdValue(collateralAsset, collateralAmount, collateralDecimals);
+
+        // Calculate the USD value of the minted amount
+        uint256 mintedUsdValue = registry.oracle().getUsdValue(syntheticAsset, mintedAmount, syntheticDecimals);
+
+        // Calculate collateral ratio: (collateralUsdValue * 10000) / mintedUsdValue
+        // The result is scaled by 10000, so 15000 means 150%
+        return (collateralUsdValue * 10000) / mintedUsdValue;
+    }
+
+    /**
+     * @dev Calculate the collateral value in synthetic asset units
+     * @param syntheticAsset The address of the synthetic asset
+     * @param collateralAsset The address of the collateral asset
+     * @param syntheticAmount The amount of synthetic asset
+     * @return collateralAmount The equivalent collateral amount
+     * @notice Used during liquidations to determine how much collateral
+     *         the liquidator should receive
+     */
+    function _calculateCollateralValue(address syntheticAsset, address collateralAsset, uint256 syntheticAmount)
+        internal
+        view
+        returns (uint256)
+    {
+        if (syntheticAmount == 0) return 0;
+
+        // Get token decimals
+        uint8 syntheticDecimals = ERC20(syntheticAsset).decimals();
+        uint8 collateralDecimals = ERC20(collateralAsset).decimals();
+
+        // Get the USD value of the synthetic amount
+        uint256 syntheticUsdValue = registry.oracle().getUsdValue(syntheticAsset, syntheticAmount, syntheticDecimals);
+
+        // Convert to collateral tokens
+        return registry.oracle().getTokenAmount(collateralAsset, syntheticUsdValue, collateralDecimals);
+    }
+
+    /**
      * @dev Create a new CDP
      * @param syntheticAsset The address of the synthetic asset to mint
      * @param collateralAsset The address of the collateral asset to deposit
@@ -203,6 +291,162 @@ contract PositionManager is Ownable {
 
         return positionId;
     }
+
+    /**
+     * @dev Liquidate an under-collateralized position
+     * @param positionId The ID of the position
+     * @notice Any user can liquidate an under-collateralized position
+     * @notice The liquidator must have enough synthetic asset to cover the position's debt
+     * @notice The liquidator receives collateral at a discount (auction discount)
+     * @notice Any remaining collateral (after fees) is returned to the position owner
+     */
+    function liquidate(uint256 positionId) external {
+        Position storage position = positions[positionId];
+
+        require(position.isActive, "Position not active");
+        require(position.mintedAmount > 0, "No debt to liquidate");
+
+        // Get effective collateral ratio
+        uint256 effectiveRatio = registry.getEffectiveCollateralRatio(position.syntheticAsset, position.collateralAsset);
+
+        // Calculate current collateral ratio
+        uint256 currentRatio = _calculateCollateralRatio(
+            position.syntheticAsset, position.collateralAsset, position.collateralAmount, position.mintedAmount
+        );
+
+        require(currentRatio < effectiveRatio, "Position is not under-collateralized");
+
+        // Burn synthetic asset from liquidator
+        SyntheticAsset(position.syntheticAsset).burn(msg.sender, position.mintedAmount);
+
+        // Calculate auction discount
+        uint256 auctionDiscount = registry.getAuctionDiscount(position.syntheticAsset);
+
+        // Get the value of the debt in USD terms
+        uint8 syntheticDecimals = ERC20(position.syntheticAsset).decimals();
+        uint8 collateralDecimals = ERC20(position.collateralAsset).decimals();
+
+        uint256 debtUsdValue =
+            registry.oracle().getUsdValue(position.syntheticAsset, position.mintedAmount, syntheticDecimals);
+
+        // Apply the auction discount to the debt value
+        uint256 discountedDebtValue = (debtUsdValue * (10000 + auctionDiscount)) / 10000;
+
+        // Convert the discounted debt value to collateral tokens
+        uint256 collateralToLiquidator =
+            registry.oracle().getTokenAmount(position.collateralAsset, discountedDebtValue, collateralDecimals);
+
+        // Cap the amount to the total collateral available
+        if (collateralToLiquidator > position.collateralAmount) {
+            collateralToLiquidator = position.collateralAmount;
+        }
+
+        // Calculate remaining collateral
+        uint256 remainingCollateral = position.collateralAmount - collateralToLiquidator;
+
+        // Calculate fee on remaining collateral
+        uint256 fee = 0;
+        if (remainingCollateral > 0) {
+            fee = (remainingCollateral * registry.protocolFee()) / 10000;
+        }
+
+        // Transfer collateral to liquidator
+        IERC20(position.collateralAsset).safeTransfer(msg.sender, collateralToLiquidator);
+
+        // Transfer fee to fee collector
+        if (fee > 0) {
+            IERC20(position.collateralAsset).safeTransfer(registry.feeCollector(), fee);
+        }
+
+        // Transfer remaining collateral to position owner
+        if (remainingCollateral > fee) {
+            IERC20(position.collateralAsset).safeTransfer(position.owner, remainingCollateral - fee);
+        }
+
+        // Close position
+        position.collateralAmount = 0;
+        position.mintedAmount = 0;
+        position.isActive = false;
+
+        emit LiquidationStarted(positionId, msg.sender);
+        emit PositionClosed(positionId);
+    }
+
+    /**
+     * @dev Calculate the required collateral for a given amount of synthetic asset (external version)
+     * @param syntheticAsset The address of the synthetic asset
+     * @param collateralAsset The address of the collateral asset
+     * @param mintAmount The amount of synthetic asset
+     * @return requiredCollateral The required collateral amount
+     * @notice This external helper function allows frontend applications to calculate
+     *         the required collateral before creating a position
+     */
+    function getRequiredCollateral(address syntheticAsset, address collateralAsset, uint256 mintAmount)
+        external
+        view
+        returns (uint256)
+    {
+        return _calculateRequiredCollateral(syntheticAsset, collateralAsset, mintAmount);
+    }
+
+    /**
+     * @dev Calculate the amount of synthetic asset that can be minted with a given collateral amount
+     * @param syntheticAsset The address of the synthetic asset
+     * @param collateralAsset The address of the collateral asset
+     * @param collateralAmount The amount of collateral
+     * @return mintableAmount The amount of synthetic asset that can be minted
+     * @notice This helper function allows frontend applications to calculate
+     *         the maximum amount of synthetic asset that can be minted
+     */
+    function getMintableAmount(address syntheticAsset, address collateralAsset, uint256 collateralAmount)
+        external
+        view
+        returns (uint256)
+    {
+        if (collateralAmount == 0) return 0;
+
+        // Get token decimals
+        uint8 syntheticDecimals = ERC20(syntheticAsset).decimals();
+        uint8 collateralDecimals = ERC20(collateralAsset).decimals();
+
+        // Get effective collateral ratio (e.g., 18000 for 180%)
+        uint256 effectiveRatio = registry.getEffectiveCollateralRatio(syntheticAsset, collateralAsset);
+
+        // Calculate collateral USD value
+        uint256 collateralUsdValue =
+            registry.oracle().getUsdValue(collateralAsset, collateralAmount, collateralDecimals);
+
+        // Calculate maximum USD value that can be minted
+        // effectiveRatio is scaled by 10000, so divide by 10000 to get the actual multiplier
+        uint256 maxMintUsdValue = (collateralUsdValue * 10000) / effectiveRatio;
+
+        // Convert USD value to synthetic tokens
+        return registry.oracle().getTokenAmount(syntheticAsset, maxMintUsdValue, syntheticDecimals);
+    }
+
+    /**
+     * @dev Calculate the resulting collateral ratio if a position is created or modified
+     * @param syntheticAsset The address of the synthetic asset
+     * @param collateralAsset The address of the collateral asset
+     * @param collateralAmount The amount of collateral
+     * @param mintAmount The amount of synthetic asset to mint
+     * @return resultingRatio The resulting collateral ratio (scaled by 10000)
+     * @notice This helper function allows frontend applications to preview
+     *         the collateral ratio before creating or modifying a position
+     */
+    function previewCollateralRatio(
+        address syntheticAsset,
+        address collateralAsset,
+        uint256 collateralAmount,
+        uint256 mintAmount
+    ) external view returns (uint256) {
+        return _calculateCollateralRatio(syntheticAsset, collateralAsset, collateralAmount, mintAmount);
+    }
+
+    // Remaining functions unchanged - depositCollateral, withdrawCollateral,
+    // mintSyntheticAsset, burnSyntheticAsset, closePosition, isUnderCollateralized,
+    // getCollateralRatio, getUserPositionCount, getAssetPositionCount, getPosition
+    // These would simply use the new core calculation functions with the same interfaces
 
     /**
      * @dev Deposit additional collateral to a position
@@ -369,79 +613,6 @@ contract PositionManager is Ownable {
     }
 
     /**
-     * @dev Liquidate an under-collateralized position
-     * @param positionId The ID of the position
-     * @notice Any user can liquidate an under-collateralized position
-     * @notice The liquidator must have enough synthetic asset to cover the position's debt
-     * @notice The liquidator receives collateral at a discount (auction discount)
-     * @notice Any remaining collateral (after fees) is returned to the position owner
-     */
-    function liquidate(uint256 positionId) external {
-        Position storage position = positions[positionId];
-
-        require(position.isActive, "Position not active");
-        require(position.mintedAmount > 0, "No debt to liquidate");
-
-        // Get effective collateral ratio
-        uint256 effectiveRatio = registry.getEffectiveCollateralRatio(position.syntheticAsset, position.collateralAsset);
-
-        // Calculate current collateral ratio
-        uint256 currentRatio = _calculateCollateralRatio(
-            position.syntheticAsset, position.collateralAsset, position.collateralAmount, position.mintedAmount
-        );
-
-        require(currentRatio < effectiveRatio, "Position is not under-collateralized");
-
-        // burn synthetic asset from liquidator
-        SyntheticAsset(position.syntheticAsset).burn(msg.sender, position.mintedAmount);
-
-        // Calculate auction discount
-        uint256 auctionDiscount = registry.getAuctionDiscount(position.syntheticAsset);
-
-        // Calculate collateral to give to liquidator
-        // Liquidator gets: (mintedAmount * (1 + auctionDiscount / 10000)) worth of collateral
-        uint256 collateralToLiquidator = _calculateCollateralValue(
-            position.syntheticAsset,
-            position.collateralAsset,
-            (position.mintedAmount * (10000 + auctionDiscount)) / 10000
-        );
-
-        if (collateralToLiquidator > position.collateralAmount) {
-            collateralToLiquidator = position.collateralAmount;
-        }
-
-        // Calculate remaining collateral
-        uint256 remainingCollateral = position.collateralAmount - collateralToLiquidator;
-
-        // Calculate fee on remaining collateral
-        uint256 fee = 0;
-        if (remainingCollateral > 0) {
-            fee = (remainingCollateral * registry.protocolFee()) / 10000;
-        }
-
-        // Transfer collateral to liquidator
-        IERC20(position.collateralAsset).safeTransfer(msg.sender, collateralToLiquidator);
-
-        // Transfer fee to fee collector
-        if (fee > 0) {
-            IERC20(position.collateralAsset).safeTransfer(registry.feeCollector(), fee);
-        }
-
-        // Transfer remaining collateral to position owner
-        if (remainingCollateral > fee) {
-            IERC20(position.collateralAsset).safeTransfer(position.owner, remainingCollateral - fee);
-        }
-
-        // Close position
-        position.collateralAmount = 0;
-        position.mintedAmount = 0;
-        position.isActive = false;
-
-        emit LiquidationStarted(positionId, msg.sender);
-        emit PositionClosed(positionId);
-    }
-
-    /**
      * @dev Check if a position is under-collateralized
      * @param positionId The ID of the position
      * @return isUnderCollateralized Whether the position is under-collateralized
@@ -480,137 +651,6 @@ contract PositionManager is Ownable {
         return _calculateCollateralRatio(
             position.syntheticAsset, position.collateralAsset, position.collateralAmount, position.mintedAmount
         );
-    }
-
-    /**
-     * @dev Calculate the required collateral for a given amount of synthetic asset
-     * @param syntheticAsset The address of the synthetic asset
-     * @param collateralAsset The address of the collateral asset
-     * @param mintAmount The amount of synthetic asset
-     * @return requiredCollateral The required collateral amount
-     * @notice Takes into account the effective collateral ratio, which includes
-     *         both the asset's minimum ratio and the collateral's risk multiplier
-     */
-    function _calculateRequiredCollateral(address syntheticAsset, address collateralAsset, uint256 mintAmount)
-        internal
-        view
-        returns (uint256)
-    {
-        if (mintAmount == 0) {
-            return 0;
-        }
-
-        // Get effective collateral ratio
-        uint256 effectiveRatio = registry.getEffectiveCollateralRatio(syntheticAsset, collateralAsset);
-
-        // Get token decimals
-        uint8 syntheticDecimals = ERC20(syntheticAsset).decimals();
-        uint8 collateralDecimals = ERC20(collateralAsset).decimals();
-
-        // Calculate the USD value of the minted amount
-        uint256 mintedUsdValue = registry.oracle().getUsdValue(syntheticAsset, mintAmount, syntheticDecimals);
-
-        // Calculate the required collateral value in USD
-        uint256 requiredCollateralUsdValue = (mintedUsdValue * effectiveRatio) / 10000;
-
-        // Get the price of the collateral token
-        (int64 collateralPrice,,) = registry.oracle().getPrice(collateralAsset);
-        require(collateralPrice > 0, "Invalid collateral price");
-
-        uint256 positiveCollateralPrice = uint256(uint64(collateralPrice));
-
-        // Calculate the required collateral amount (adjusting for price decimals)
-        uint256 requiredCollateral =
-            (requiredCollateralUsdValue * (10 ** collateralDecimals)) / (positiveCollateralPrice / (10 ** 8));
-
-        // Don't add any safety buffer - return the exact amount needed
-        // This will allow positions with exactly the minimum collateral
-        return requiredCollateral;
-    }
-
-    /**
-     * @dev Calculate the collateral value in synthetic asset units
-     * @param syntheticAsset The address of the synthetic asset
-     * @param collateralAsset The address of the collateral asset
-     * @param syntheticAmount The amount of synthetic asset
-     * @return collateralAmount The equivalent collateral amount
-     * @notice Used during liquidations to determine how much collateral
-     *         the liquidator should receive
-     */
-    function _calculateCollateralValue(address syntheticAsset, address collateralAsset, uint256 syntheticAmount)
-        internal
-        view
-        returns (uint256)
-    {
-        if (syntheticAmount == 0) {
-            return 0;
-        }
-
-        // Get token decimals
-        uint8 syntheticDecimals = ERC20(syntheticAsset).decimals();
-        uint8 collateralDecimals = ERC20(collateralAsset).decimals();
-
-        // Get prices
-        (int64 syntheticPrice,,) = registry.oracle().getPrice(syntheticAsset);
-        (int64 collateralPrice,,) = registry.oracle().getPrice(collateralAsset);
-
-        require(syntheticPrice > 0, "Invalid synthetic price");
-        require(collateralPrice > 0, "Invalid collateral price");
-
-        uint256 positiveSyntheticPrice = uint256(uint64(syntheticPrice));
-        uint256 positiveCollateralPrice = uint256(uint64(collateralPrice));
-
-        // Calculate synthetic value in USD
-        uint256 syntheticValue = (syntheticAmount * positiveSyntheticPrice);
-
-        // Adjust for decimals
-        if (syntheticDecimals > 8) {
-            syntheticValue = syntheticValue / (10 ** (syntheticDecimals - 8));
-        } else {
-            syntheticValue = syntheticValue * (10 ** (8 - syntheticDecimals));
-        }
-
-        // Convert to collateral amount: (syntheticValue * 10^collateralDecimals) / collateralPrice
-        return (syntheticValue * (10 ** collateralDecimals)) / positiveCollateralPrice;
-    }
-
-    /**
-     * @dev Calculate a position's collateral ratio
-     * @param syntheticAsset The address of the synthetic asset
-     * @param collateralAsset The address of the collateral asset
-     * @param collateralAmount The amount of collateral
-     * @param mintedAmount The amount of synthetic asset minted
-     * @return collateralRatio The collateral ratio (scaled by 10000)
-     * @notice Returns the current collateralization ratio of a position
-     * @notice A ratio of 15000 means 150% collateralization
-     */
-    function _calculateCollateralRatio(
-        address syntheticAsset,
-        address collateralAsset,
-        uint256 collateralAmount,
-        uint256 mintedAmount
-    ) internal view returns (uint256) {
-        if (mintedAmount == 0) {
-            return type(uint256).max; // Infinite ratio if no debt
-        }
-
-        if (collateralAmount == 0) {
-            return 0; // Zero ratio if no collateral
-        }
-
-        // Get token decimals
-        uint8 syntheticDecimals = ERC20(syntheticAsset).decimals();
-        uint8 collateralDecimals = ERC20(collateralAsset).decimals();
-
-        // Calculate the USD value of the collateral
-        uint256 collateralUsdValue =
-            registry.oracle().getUsdValue(collateralAsset, collateralAmount, collateralDecimals);
-
-        // Calculate the USD value of the minted amount
-        uint256 mintedUsdValue = registry.oracle().getUsdValue(syntheticAsset, mintedAmount, syntheticDecimals);
-
-        // Calculate the collateral ratio: (collateralUsdValue * 10000) / mintedUsdValue
-        return (collateralUsdValue * 10000) / mintedUsdValue;
     }
 
     /**

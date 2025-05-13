@@ -7,16 +7,22 @@ import "../src/PositionManager.sol";
 import "../src/OracleInterface.sol";
 import "../src/SyntheticAsset.sol";
 
+/**
+ * @title VerifyDeploymentScript
+ * @dev Script to verify the deployment and configuration of the Leprechaun protocol
+ */
 contract VerifyDeploymentScript is Script {
-    // Contract addresses
-    address constant LEPRECHAUN_FACTORY = 0x5c7FF36e0BB492c81d85e501C8ce9a418618A4eD;
-    address constant POSITION_MANAGER = 0xA202BBa404427dEa715D0ca424FB7dA337fF3a46;
-    address constant ORACLE_INTERFACE = 0x3979eeBA732A0d8B422557f489E381e6ee2DD1F8;
-    address constant SYNTHETIC_DOW = 0x9E623E30bddA40464945cf14777CA990BE2Ba984;
-    address constant MOCK_USDC = 0x26bb5E0E1b93440720cebFCdD94CaA7B515af1cf;
-    address constant MOCK_WETH = 0x9FB8bc690C3Dcf32464062f27658A42C87F25C26;
-    address constant MOCK_WBTC = 0xE157a88bDaFf6487408131b8369CaaE56691E562;
-    address constant PYTH_ORACLE = 0xff1a0f4744e8582DF1aE09D5611b887B6a12925C;
+    // Replace these addresses with your actual deployed contract addresses
+    address constant LEPRECHAUN_FACTORY = 0x364A6127A8b425b6857f4962412b0664D257BDD5;
+    address constant POSITION_MANAGER = 0x401d1cD4D0ff1113458339065Cf9a1f2e8425afb;
+    address constant ORACLE_INTERFACE = 0xBc2e651eD3566c6dF862815Ed05b99eFb9bC0255;
+    address constant SYNTHETIC_DOW = 0xD14F0B478F993967240Aa5995eb2b1Ca6810969a;
+    address constant MOCK_USDC = 0x39510c9f9E577c65b9184582745117341e7bdD73;
+    address constant MOCK_WETH = 0x95539ce7555F53dACF3a79Ff760C06e5B4e310c3;
+    address constant MOCK_WBTC = 0x1DBf5683c73E0D0A0e20AfC76F924e08E95637F7;
+
+    // Real Pyth oracle on Arbitrum
+    address constant PYTH_ORACLE = 0x8250f4aF4B972684F7b336503E2D6dFeDeB1487a;
 
     // Expected configuration values
     bytes32 constant DOW_USD_FEED_ID = 0xf3b50961ff387a3d68217e2715637d0add6013e7ecb83c36ae8062f97c46929e;
@@ -53,9 +59,15 @@ contract VerifyDeploymentScript is Script {
         // Check Collateral allowances for DOW asset
         _verifyCollateralAllowances();
 
+        // Math verification tests
+        _verifyMathCalculations();
+
         console.log("\n========== VERIFICATION COMPLETE ==========\n");
     }
 
+    /**
+     * @dev Verify Oracle Interface configuration
+     */
     function _verifyOracleInterface() internal view {
         console.log("Verifying OracleInterface...");
         OracleInterface oracle = OracleInterface(ORACLE_INTERFACE);
@@ -86,12 +98,12 @@ contract VerifyDeploymentScript is Script {
             console.log("  ERROR: Some price feeds are not registered!");
         }
 
-        // Check feed IDs (this requires custom function in OracleInterface to expose them)
-        console.log("  Note: Cannot verify price feed IDs directly as they're not exposed via public getters");
-
         console.log("OracleInterface verification complete.");
     }
 
+    /**
+     * @dev Verify LeprechaunFactory configuration
+     */
     function _verifyLeprechaunFactory() internal view {
         console.log("\nVerifying LeprechaunFactory...");
         LeprechaunFactory factory = LeprechaunFactory(LEPRECHAUN_FACTORY);
@@ -175,6 +187,9 @@ contract VerifyDeploymentScript is Script {
         console.log("LeprechaunFactory verification complete.");
     }
 
+    /**
+     * @dev Verify PositionManager configuration
+     */
     function _verifyPositionManager() internal view {
         console.log("\nVerifying PositionManager...");
         PositionManager manager = PositionManager(POSITION_MANAGER);
@@ -200,6 +215,9 @@ contract VerifyDeploymentScript is Script {
         console.log("PositionManager verification complete.");
     }
 
+    /**
+     * @dev Verify Synthetic Asset configuration
+     */
     function _verifySyntheticAsset() internal view {
         console.log("\nVerifying sDOW Synthetic Asset...");
         SyntheticAsset asset = SyntheticAsset(SYNTHETIC_DOW);
@@ -226,6 +244,9 @@ contract VerifyDeploymentScript is Script {
         console.log("sDOW Synthetic Asset verification complete.");
     }
 
+    /**
+     * @dev Verify Collateral Token registrations
+     */
     function _verifyCollateralRegistrations() internal view {
         console.log("\nVerifying Collateral Registrations...");
         LeprechaunFactory factory = LeprechaunFactory(LEPRECHAUN_FACTORY);
@@ -240,7 +261,7 @@ contract VerifyDeploymentScript is Script {
         // Verify each collateral type
         for (uint256 i = 0; i < collateralCount && i < 3; i++) {
             address collateralAddress = factory.allCollateralTypes(i);
-            (address tokenAddress, uint256 multiplier, bool isActive) = factory.collateralTypes(collateralAddress);
+            (, uint256 multiplier, bool isActive) = factory.collateralTypes(collateralAddress);
 
             string memory collateralName;
             if (collateralAddress == MOCK_USDC) {
@@ -274,6 +295,9 @@ contract VerifyDeploymentScript is Script {
         console.log("Collateral Registrations verification complete.");
     }
 
+    /**
+     * @dev Verify Collateral allowances for sDOW
+     */
     function _verifyCollateralAllowances() internal view {
         console.log("\nVerifying Collateral Allowances for sDOW...");
         LeprechaunFactory factory = LeprechaunFactory(LEPRECHAUN_FACTORY);
@@ -301,38 +325,106 @@ contract VerifyDeploymentScript is Script {
         uint256 expectedWbtcRatio = (EXPECTED_MIN_COLLATERAL_RATIO * EXPECTED_WBTC_MULTIPLIER) / 10000;
 
         console.log("  Effective collateral ratios:");
-        // console.log(
-        //     "    mUSDC:",
-        //     usdcRatio,
-        //     "(Expected:",
-        //     expectedUsdcRatio,
-        //     ")"
-        // );
-        // console.log(
-        //     "    mWETH:",
-        //     wethRatio,
-        //     "(Expected:",
-        //     expectedWethRatio,
-        //     ")"
-        // );
-        // console.log(
-        //     "    mWBTC:",
-        //     wbtcRatio,
-        //     "(Expected:",
-        //     expectedWbtcRatio,
-        //     ")"
-        // );
+        console.log("    mUSDC:", usdcRatio, "(Expected:", expectedUsdcRatio);
+        console.log("    mWETH:", wethRatio, "(Expected:", expectedWethRatio);
+        console.log("    mWBTC:", wbtcRatio, "(Expected:", expectedWbtcRatio);
 
-        // if (
-        //     usdcRatio != expectedUsdcRatio ||
-        //     wethRatio != expectedWethRatio ||
-        //     wbtcRatio != expectedWbtcRatio
-        // ) {
-        //     console.log(
-        //         "  ERROR: Some effective collateral ratios don't match expected values!"
-        //     );
-        // }
+        if (usdcRatio != expectedUsdcRatio || wethRatio != expectedWethRatio || wbtcRatio != expectedWbtcRatio) {
+            console.log("  ERROR: Some effective collateral ratios don't match expected values!");
+        }
 
-        // console.log("Collateral Allowances verification complete.");
+        console.log("Collateral Allowances verification complete.");
+    }
+
+    /**
+     * @dev Verify Math Calculations with refactored code
+     */
+    function _verifyMathCalculations() internal view {
+        console.log("\nVerifying Math Calculations...");
+        PositionManager manager = PositionManager(POSITION_MANAGER);
+
+        // Test bidirectional calculations with different collateral types
+        _testBidirectionalCalculation("USDC Collateral", MOCK_USDC, 100 * 10 ** 6, 6); // 100 USDC
+        _testBidirectionalCalculation("WETH Collateral", MOCK_WETH, 1 * 10 ** 18, 18); // 1 WETH
+        _testBidirectionalCalculation("WBTC Collateral", MOCK_WBTC, 0.1 * 10 ** 8, 8); // 0.1 WBTC
+
+        console.log("Math Calculations verification complete.");
+    }
+
+    /**
+     * @dev Test bidirectional calculations for collateral to synthetic amount and back
+     */
+    function _testBidirectionalCalculation(
+        string memory label,
+        address collateralAsset,
+        uint256 collateralAmount,
+        uint8 decimals
+    ) internal view {
+        console.log("\n  Testing", label);
+        PositionManager manager = PositionManager(POSITION_MANAGER);
+
+        // Calculate mintable synthetic amount
+        uint256 mintableAmount = manager.getMintableAmount(SYNTHETIC_DOW, collateralAsset, collateralAmount);
+
+        if (decimals == 6) {
+            console.log("    Input collateral:", collateralAmount / 1e6, "tokens (6 decimals)");
+        } else if (decimals == 8) {
+            console.log("    Input collateral:", collateralAmount / 1e8, "tokens (8 decimals)");
+        } else {
+            console.log("    Input collateral:", collateralAmount / 1e18, "tokens (18 decimals)");
+        }
+
+        console.log("    Calculated mintable synthetic:", mintableAmount / 1e18, "tokens");
+
+        // If mintable is 0, can't do bidirectional test
+        if (mintableAmount == 0) {
+            console.log("    No synthetic tokens can be minted, skipping bidirectional check");
+            return;
+        }
+
+        // Calculate required collateral for the mintable amount
+        uint256 requiredCollateral = manager.getRequiredCollateral(SYNTHETIC_DOW, collateralAsset, mintableAmount);
+
+        if (decimals == 6) {
+            console.log("    Required collateral:", requiredCollateral / 1e6, "tokens (6 decimals)");
+        } else if (decimals == 8) {
+            console.log("    Required collateral:", requiredCollateral / 1e8, "tokens (8 decimals)");
+        } else {
+            console.log("    Required collateral:", requiredCollateral / 1e18, "tokens (18 decimals)");
+        }
+
+        // Calculate percentage difference
+        uint256 differencePercentage = 0;
+        if (collateralAmount > 0) {
+            if (requiredCollateral > collateralAmount) {
+                differencePercentage = ((requiredCollateral - collateralAmount) * 100) / collateralAmount;
+            } else {
+                differencePercentage = ((collateralAmount - requiredCollateral) * 100) / collateralAmount;
+            }
+        }
+
+        console.log("    Bidirectional difference: ", differencePercentage, "%");
+
+        if (differencePercentage > 1) {
+            console.log("    WARNING: Bidirectional calculation difference exceeds 1%!");
+        } else {
+            console.log("    Bidirectional calculations match (within 1% tolerance)");
+        }
+
+        // Preview collateral ratio
+        uint256 ratio = manager.previewCollateralRatio(SYNTHETIC_DOW, collateralAsset, collateralAmount, mintableAmount);
+
+        // Get minimum required ratio
+        LeprechaunFactory factory = LeprechaunFactory(LEPRECHAUN_FACTORY);
+        uint256 minRatio = factory.getEffectiveCollateralRatio(SYNTHETIC_DOW, collateralAsset);
+
+        console.log("    Collateral ratio:", ratio);
+        console.log("    Minimum required ratio:", minRatio);
+
+        if (ratio < minRatio) {
+            console.log("    ERROR: Collateral ratio below minimum requirement!");
+        } else {
+            console.log("    Collateral ratio meets or exceeds minimum requirement");
+        }
     }
 }

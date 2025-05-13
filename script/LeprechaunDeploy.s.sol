@@ -30,7 +30,7 @@ contract MockToken is ERC20 {
 
 /**
  * @title LeprechaunDeployScript
- * @dev Deployment script for the Leprechaun protocol on Arbitrum with mock tokens
+ * @dev Deployment script for the refactored Leprechaun protocol with math improvements
  */
 contract LeprechaunDeployScript is Script {
     // Protocol constants
@@ -46,7 +46,7 @@ contract LeprechaunDeployScript is Script {
     uint256 constant PROTOCOL_FEE = 150;
 
     // Real Pyth oracle address on Arbitrum
-    address constant PYTH_ORACLE_ADDRESS = 0xff1a0f4744e8582DF1aE09D5611b887B6a12925C;
+    address constant PYTH_ORACLE_ADDRESS = 0x8250f4aF4B972684F7b336503E2D6dFeDeB1487a;
 
     // Real Pyth price feed IDs
     bytes32 constant DOW_USD_FEED_ID = 0xf3b50961ff387a3d68217e2715637d0add6013e7ecb83c36ae8062f97c46929e;
@@ -77,7 +77,7 @@ contract LeprechaunDeployScript is Script {
         // Get the deployer's address (whoever's private key is being used)
         address deployer = msg.sender;
 
-        console.log("Deploying Leprechaun Protocol to Arbitrum with Mock Tokens");
+        console.log("Deploying Refactored Leprechaun Protocol to Arbitrum with Math Improvements");
         console.log("Deployer: ", deployer);
         console.log("Fee Collector: ", feeCollector);
 
@@ -101,17 +101,21 @@ contract LeprechaunDeployScript is Script {
 
         console.log("Minted mock tokens to deployer");
 
-        // Deploy oracle interface to connect with real Pyth oracle
+        // Deploy new refactored oracle interface with improved math
         oracle = new OracleInterface(PYTH_ORACLE_ADDRESS);
-        console.log("Oracle Interface deployed at:", address(oracle));
+        console.log("Refactored Oracle Interface deployed at:", address(oracle));
 
         // Deploy factory
         factory = new LeprechaunFactory(deployer, feeCollector, address(oracle));
         console.log("LeprechaunFactory deployed at:", address(factory));
 
-        // Deploy position manager
+        // Set protocol fee to 1.5%
+        factory.updateProtocolFee(PROTOCOL_FEE);
+        console.log("Protocol fee set to 1.5%");
+
+        // Deploy position manager with refactored calculations
         positionManager = new PositionManager(address(factory), address(oracle), deployer);
-        console.log("PositionManager deployed at:", address(positionManager));
+        console.log("Refactored PositionManager deployed at:", address(positionManager));
 
         // Register DOW/USD synthetic asset
         console.log("Registering DOW/USD synthetic asset...");
@@ -153,7 +157,8 @@ contract LeprechaunDeployScript is Script {
         // End broadcast
         vm.stopBroadcast();
 
-        console.log("Deployment complete!");
+        console.log("\n=== Deployment Summary ===");
+
         console.log("LeprechaunFactory:  ", address(factory));
         console.log("PositionManager:    ", address(positionManager));
         console.log("OracleInterface:    ", address(oracle));
@@ -162,19 +167,6 @@ contract LeprechaunDeployScript is Script {
         console.log("Mock WETH:          ", address(mockWETH));
         console.log("Mock WBTC:          ", address(mockWBTC));
 
-        console.log("\nNOTE: The mock tokens are using real Pyth price feeds:");
-        console.log("- sDOW is using the real DOW/USD price feed: ", toHexString(DOW_USD_FEED_ID));
-    }
-
-    function toHexString(bytes32 value) internal pure returns (string memory) {
-        bytes memory result = new bytes(66);
-        result[0] = "0";
-        result[1] = "x";
-        for (uint256 i = 0; i < 32; i++) {
-            bytes1 b = value[i];
-            result[2 + i * 2] = bytes1(uint8(b) / 16 <= 9 ? uint8(b) / 16 + 48 : uint8(b) / 16 + 87);
-            result[3 + i * 2] = bytes1(uint8(b) % 16 <= 9 ? (uint8(b) % 16) + 48 : (uint8(b) % 16) + 87);
-        }
-        return string(result);
+        console.log("\nNOTE: The mock tokens are using real Pyth price feeds");
     }
 }
