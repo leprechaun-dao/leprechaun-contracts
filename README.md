@@ -18,7 +18,7 @@ Leprechaun Protocol is a DeFi system that enables users to create synthetic asse
 
 ## Overview
 
-Leprechaun Protocol allows users to mint synthetic assets (e.g., synthetic gold, synthetic stocks) by depositing various types of collateral. The protocol maintains strict collateralization requirements enforced through oracle price feeds, with automatic liquidation mechanisms to ensure system solvency.
+Leprechaun Protocol allows users to mint synthetic assets (e.g., synthetic gold, synthetic stocks) by depositing various types of collateral. The protocol maintains strict collateralization requirements and use oracle price feeds, with liquidation mechanisms to ensure system solvency.
 
 ## Core Components
 
