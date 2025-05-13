@@ -18,12 +18,9 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  */
 contract LeprechaunInteractionScript is Script {
     // Contract addresses - replace with your actual deployed addresses
-    address constant POSITION_MANAGER =
-        0x401d1cD4D0ff1113458339065Cf9a1f2e8425afb;
-    address constant LEPRECHAUN_FACTORY =
-        0x364A6127A8b425b6857f4962412b0664D257BDD5;
-    address constant SYNTHETIC_ASSET =
-        0xD14F0B478F993967240Aa5995eb2b1Ca6810969a; // sDOW
+    address constant POSITION_MANAGER = 0x401d1cD4D0ff1113458339065Cf9a1f2e8425afb;
+    address constant LEPRECHAUN_FACTORY = 0x364A6127A8b425b6857f4962412b0664D257BDD5;
+    address constant SYNTHETIC_ASSET = 0xD14F0B478F993967240Aa5995eb2b1Ca6810969a; // sDOW
     address constant MOCK_USDC = 0x39510c9f9E577c65b9184582745117341e7bdD73;
 
     // Interface declarations
@@ -77,26 +74,13 @@ contract LeprechaunInteractionScript is Script {
         // Step 3: Calculate mintable amount
         console.log("\n3. Calculating mintable amount...");
         uint256 collateralAmount = 500 * 10 ** 6; // 500 USDC
-        uint256 mintableAmount = positionManager.getMintableAmount(
-            SYNTHETIC_ASSET,
-            MOCK_USDC,
-            collateralAmount
-        );
-        console.log(
-            "With 500 USDC as collateral, you can mint:",
-            mintableAmount / 10 ** 18,
-            "synthetic tokens"
-        );
+        uint256 mintableAmount = positionManager.getMintableAmount(SYNTHETIC_ASSET, MOCK_USDC, collateralAmount);
+        console.log("With 500 USDC as collateral, you can mint:", mintableAmount / 10 ** 18, "synthetic tokens");
 
         // Step 4: Create a position
         console.log("\n4. Creating position...");
         uint256 mintAmount = (mintableAmount * 90) / 100; // Use 90% of max mintable for safety
-        positionId = positionManager.createPosition(
-            SYNTHETIC_ASSET,
-            MOCK_USDC,
-            collateralAmount,
-            mintAmount
-        );
+        positionId = positionManager.createPosition(SYNTHETIC_ASSET, MOCK_USDC, collateralAmount, mintAmount);
         console.log("Position created! Position ID:", positionId);
 
         // Step 5: Check synthetic token balance
@@ -134,31 +118,15 @@ contract LeprechaunInteractionScript is Script {
         console.log("  Owner:", owner);
         console.log("  Synthetic asset:", syntheticAssetAddr);
         console.log("  Collateral asset:", collateralAssetAddr);
-        console.log(
-            "  Collateral amount:",
-            currentCollateral / 10 ** 6,
-            "USDC"
-        );
-        console.log(
-            "  Minted amount:",
-            currentMintedAmount / 10 ** 18,
-            "synthetic tokens"
-        );
+        console.log("  Collateral amount:", currentCollateral / 10 ** 6, "USDC");
+        console.log("  Minted amount:", currentMintedAmount / 10 ** 18, "synthetic tokens");
         console.log("  Is active:", isActive);
 
         // Step 9: Calculate how much more can be minted with the new collateral
         console.log("\n9. Calculating additional mintable amount...");
-        uint256 totalMintableAmount = positionManager.getMintableAmount(
-            SYNTHETIC_ASSET,
-            MOCK_USDC,
-            currentCollateral
-        );
+        uint256 totalMintableAmount = positionManager.getMintableAmount(SYNTHETIC_ASSET, MOCK_USDC, currentCollateral);
         uint256 additionalMintable = totalMintableAmount - currentMintedAmount;
-        console.log(
-            "Additional mintable amount:",
-            additionalMintable / 10 ** 18,
-            "synthetic tokens"
-        );
+        console.log("Additional mintable amount:", additionalMintable / 10 ** 18, "synthetic tokens");
 
         // Step 10: Mint additional synthetic tokens
         console.log("\n10. Minting additional synthetic tokens...");
@@ -170,30 +138,15 @@ contract LeprechaunInteractionScript is Script {
         console.log("\n11. Final position status...");
 
         // Get updated position data
-        (
-            ,
-            ,
-            ,
-            uint256 finalCollateral,
-            uint256 finalMintedAmount,
-            ,
-
-        ) = positionManager.getPosition(positionId);
+        (,,, uint256 finalCollateral, uint256 finalMintedAmount,,) = positionManager.getPosition(positionId);
 
         uint256 finalRatio = positionManager.getCollateralRatio(positionId);
         uint256 finalSyntheticBalance = syntheticAsset.balanceOf(user);
 
         console.log("  Final collateral:", finalCollateral / 10 ** 6, "USDC");
-        console.log(
-            "  Final minted amount:",
-            finalMintedAmount / 10 ** 18,
-            "synthetic tokens"
-        );
+        console.log("  Final minted amount:", finalMintedAmount / 10 ** 18, "synthetic tokens");
         console.log("  Final collateral ratio:", finalRatio / 100, "%");
-        console.log(
-            "  Final synthetic token balance:",
-            finalSyntheticBalance / 10 ** 18
-        );
+        console.log("  Final synthetic token balance:", finalSyntheticBalance / 10 ** 18);
 
         // End broadcast
         vm.stopBroadcast();
