@@ -26,7 +26,7 @@ Leprechaun Protocol allows users to mint synthetic assets (e.g., synthetic gold,
 - **PositionManager**: Handles collateralized debt positions (CDPs)
 - **SyntheticAsset**: ERC20 token implementation representing synthetic assets
 - **OracleInterface**: Integration with Pyth Network for reliable price feeds
-- **LeprechaunLens**: A view contract that provides formatted data access for frontends
+- **LeprechaunLens**: A view contract that provides formatted data access
 
 ## Key Features
 
