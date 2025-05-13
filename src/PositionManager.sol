@@ -513,15 +513,19 @@ contract PositionManager is Ownable {
         // Calculate the required collateral value in USD
         uint256 requiredCollateralUsdValue = (mintedUsdValue * effectiveRatio) / 10000;
 
-        // Convert the USD value to collateral tokens
-        // This is simplified and assumes 1:1 conversion based on price
+        // Get the price of the collateral token
         (int64 collateralPrice,,) = registry.oracle().getPrice(collateralAsset);
         require(collateralPrice > 0, "Invalid collateral price");
 
         uint256 positiveCollateralPrice = uint256(uint64(collateralPrice));
 
-        // Calculate required collateral: (requiredCollateralUsdValue * 10^collateralDecimals) / collateralPrice
-        return (requiredCollateralUsdValue * (10 ** collateralDecimals)) / positiveCollateralPrice;
+        // Calculate the required collateral amount (adjusting for price decimals)
+        uint256 requiredCollateral =
+            (requiredCollateralUsdValue * (10 ** collateralDecimals)) / (positiveCollateralPrice / (10 ** 8));
+
+        // Don't add any safety buffer - return the exact amount needed
+        // This will allow positions with exactly the minimum collateral
+        return requiredCollateral;
     }
 
     /**
