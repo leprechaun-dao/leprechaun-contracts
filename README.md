@@ -26,15 +26,17 @@ Leprechaun Protocol allows users to mint synthetic assets (e.g., synthetic gold,
 - **PositionManager**: Handles collateralized debt positions (CDPs)
 - **SyntheticAsset**: ERC20 token implementation representing synthetic assets
 - **OracleInterface**: Integration with Pyth Network for reliable price feeds
+- **LeprechaunLens**: A view contract that provides formatted data access for frontends
 
 ## Key Features
 
 - 🏦 **Multi-Collateral Support**: Use various tokens as collateral with different risk parameters
 - 🧠 **Dynamic Risk Management**: Collateral-specific risk multipliers and asset-specific minimum collateral ratios
-- 📊 **Oracle Integration**: Real-time price feeds from Pyth Network with staleness checks
+- 📊 **Enhanced Oracle Integration**: Real-time price feeds from Pyth Network with staleness checks
 - 💰 **Liquidation Incentives**: Configurable auction discounts for liquidators
 - 🔄 **Flexible Position Management**: Deposit, withdraw, mint, burn operations for CDP management
 - 💼 **Protocol Fees**: Configurable fee system for sustainability
+- 👀 **Data Access Layer**: Dedicated LeprechaunLens contract for easy frontend integration
 
 ## Prerequisites
 
@@ -45,8 +47,8 @@ Leprechaun Protocol allows users to mint synthetic assets (e.g., synthetic gold,
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/leprechaun-protocol.git
-cd leprechaun-protocol
+git clone https://github.com/yourusername/leprechaun-contracts.git
+cd leprechaun-contracts
 ```
 
 2. Install dependencies:
@@ -82,7 +84,7 @@ forge test --gas-report
 Run a specific test:
 
 ```bash
-forge test --match-test testCreatePosition
+forge test --match-test testBidirectionalCalculations
 ```
 
 ### Run Local Node
@@ -98,7 +100,7 @@ anvil
 Deploy to a network:
 
 ```bash
-forge script script/Deploy.s.sol:DeployScript --rpc-url <your_rpc_url> --private-key <your_private_key>
+FEE_COLLECTOR_ADDRESS= forge script script/LeprechaunDeploy.s.sol:LeprechaunDeployScript --rpc-url <your_rpc_url> --private-key <your_private_key>
 ```
 
 ## Contract Architecture
@@ -144,9 +146,21 @@ Connects to Pyth Network for reliable price feeds, ensuring the protocol has acc
 **Key Functions:**
 
 - Register price feeds for assets
-- Update prices with new data
 - Retrieve current prices
 - Convert token amounts to USD values
+
+### LeprechaunLens
+
+A view contract that provides formatted data access for frontend applications without modifying protocol state.
+
+**Key Functions:**
+
+- Get protocol configuration information
+- Retrieve synthetic asset and collateral details
+- Get user positions with current health metrics
+- Find positions at risk of liquidation
+- Calculate liquidation returns
+- Preview operations like minting or withdrawing
 
 ## Contributing
 
