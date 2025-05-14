@@ -17,13 +17,10 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  */
 contract LeprechaunTargetRatioInteraction is Script {
     // Contract addresses - replace with your actual deployed addresses
-    address constant POSITION_MANAGER =
-        0x401d1cD4D0ff1113458339065Cf9a1f2e8425afb;
-    address constant LEPRECHAUN_FACTORY =
-        0x364A6127A8b425b6857f4962412b0664D257BDD5;
+    address constant POSITION_MANAGER = 0x401d1cD4D0ff1113458339065Cf9a1f2e8425afb;
+    address constant LEPRECHAUN_FACTORY = 0x364A6127A8b425b6857f4962412b0664D257BDD5;
     address constant LENS_CONTRACT = 0x80d4D0e68efDBB8b16fdD1e8ff7511ecc3869503; // Replace with actual address
-    address constant SYNTHETIC_ASSET =
-        0xD14F0B478F993967240Aa5995eb2b1Ca6810969a; // sDOW
+    address constant SYNTHETIC_ASSET = 0xD14F0B478F993967240Aa5995eb2b1Ca6810969a; // sDOW
     address constant MOCK_USDC = 0x39510c9f9E577c65b9184582745117341e7bdD73;
 
     // Interface declarations
@@ -66,28 +63,11 @@ contract LeprechaunTargetRatioInteraction is Script {
         // Step 2: Calculate the mint amount for target ratio
         console.log("\n2. Calculating mint amount for target ratio...");
 
-        (
-            uint256 mintAmount,
-            uint256 maxMintable,
-            uint256 effectiveRatio,
-            uint256 minRequiredRatio
-        ) = lens.calculateMintAmountForTargetRatio(
-                SYNTHETIC_ASSET,
-                MOCK_USDC,
-                collateralAmount,
-                targetRatio
-            );
+        (uint256 mintAmount, uint256 maxMintable, uint256 effectiveRatio, uint256 minRequiredRatio) =
+            lens.calculateMintAmountForTargetRatio(SYNTHETIC_ASSET, MOCK_USDC, collateralAmount, targetRatio);
 
-        console.log(
-            "   Mint amount for 250% ratio:",
-            mintAmount / 10 ** 18,
-            "synthetic tokens"
-        );
-        console.log(
-            "   Maximum mintable amount:",
-            maxMintable / 10 ** 18,
-            "synthetic tokens"
-        );
+        console.log("   Mint amount for 250% ratio:", mintAmount / 10 ** 18, "synthetic tokens");
+        console.log("   Maximum mintable amount:", maxMintable / 10 ** 18, "synthetic tokens");
         console.log("   Effective ratio:", effectiveRatio / 100, "%");
         console.log("   Minimum required ratio:", minRequiredRatio / 100, "%");
 
@@ -100,24 +80,11 @@ contract LeprechaunTargetRatioInteraction is Script {
             uint256 collateralUsdValue,
             uint256 syntheticUsdValue, // effectiveRatio (already have this)
             ,
+        ) = lens.previewPositionWithTargetRatio(SYNTHETIC_ASSET, MOCK_USDC, collateralAmount, targetRatio);
 
-        ) = lens.previewPositionWithTargetRatio(
-                SYNTHETIC_ASSET,
-                MOCK_USDC,
-                collateralAmount,
-                targetRatio
-            );
-
-        console.log(
-            "   Collateral USD value: $",
-            collateralUsdValue / 10 ** 18
-        );
+        console.log("   Collateral USD value: $", collateralUsdValue / 10 ** 18);
         console.log("   Synthetic USD value: $", syntheticUsdValue / 10 ** 18);
-        console.log(
-            "   USD ratio:",
-            (collateralUsdValue * 100) / syntheticUsdValue,
-            "%"
-        );
+        console.log("   USD ratio:", (collateralUsdValue * 100) / syntheticUsdValue, "%");
 
         // Step 4: Approve tokens to be used by Position Manager
         console.log("\n4. Approving tokens for Position Manager...");
@@ -126,12 +93,7 @@ contract LeprechaunTargetRatioInteraction is Script {
 
         // Step 5: Create a position with the calculated mint amount
         console.log("\n5. Creating position with target ratio...");
-        positionId = positionManager.createPosition(
-            SYNTHETIC_ASSET,
-            MOCK_USDC,
-            collateralAmount,
-            mintAmount
-        );
+        positionId = positionManager.createPosition(SYNTHETIC_ASSET, MOCK_USDC, collateralAmount, mintAmount);
         console.log("Position created! Position ID:", positionId);
 
         // Step 6: Verify the created position
@@ -149,25 +111,13 @@ contract LeprechaunTargetRatioInteraction is Script {
         console.log("   Owner:", owner);
         console.log("   Synthetic asset:", syntheticAssetAddr);
         console.log("   Collateral asset:", collateralAssetAddr);
-        console.log(
-            "   Collateral amount:",
-            actualCollateral / 10 ** 6,
-            "USDC"
-        );
-        console.log(
-            "   Minted amount:",
-            actualMinted / 10 ** 18,
-            "synthetic tokens"
-        );
+        console.log("   Collateral amount:", actualCollateral / 10 ** 6, "USDC");
+        console.log("   Minted amount:", actualMinted / 10 ** 18, "synthetic tokens");
         console.log("Is active:", isActive);
 
         // Step 7: Get actual collateral ratio
         uint256 actualRatio = positionManager.getCollateralRatio(positionId);
-        console.log(
-            "\n7. Actual position collateral ratio:",
-            actualRatio / 100,
-            "%"
-        );
+        console.log("\n7. Actual position collateral ratio:", actualRatio / 100, "%");
 
         // Check if it matches the target
         if (actualRatio >= targetRatio) {
@@ -178,10 +128,7 @@ contract LeprechaunTargetRatioInteraction is Script {
 
         // Step 8: Check synthetic token balance
         uint256 syntheticBalance = syntheticAsset.balanceOf(user);
-        console.log(
-            "\n8. Synthetic token balance:",
-            syntheticBalance / 10 ** 18
-        );
+        console.log("\n8. Synthetic token balance:", syntheticBalance / 10 ** 18);
 
         // End broadcast
         vm.stopBroadcast();

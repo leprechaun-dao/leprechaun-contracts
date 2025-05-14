@@ -14,10 +14,8 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  */
 contract LeprechaunSyntheticAssetDeployment is Script {
     // Contract addresses - replace with your actual deployed addresses
-    address constant LEPRECHAUN_FACTORY =
-        0x364A6127A8b425b6857f4962412b0664D257BDD5;
-    address constant POSITION_MANAGER =
-        0x401d1cD4D0ff1113458339065Cf9a1f2e8425afb;
+    address constant LEPRECHAUN_FACTORY = 0x364A6127A8b425b6857f4962412b0664D257BDD5;
+    address constant POSITION_MANAGER = 0x401d1cD4D0ff1113458339065Cf9a1f2e8425afb;
 
     // Collateral tokens
     address constant USDC = 0x39510c9f9E577c65b9184582745117341e7bdD73;
@@ -25,10 +23,8 @@ contract LeprechaunSyntheticAssetDeployment is Script {
     address constant WBTC = 0x1DBf5683c73E0D0A0e20AfC76F924e08E95637F7;
 
     // Pyth price feed IDs - real price feeds provided by the user
-    bytes32 constant GOLD_XAU_USD_FEED_ID =
-        0x765d2ba906dbc32ca17cc11f5310a89e9ee1f6420508c63861f2f8ba4ee34bb2;
-    bytes32 constant US_OIL_FEED_ID =
-        0x925ca92ff005ae943c158e3563f59698ce7e75c5a8c8dd43303a0a154887b3e6;
+    bytes32 constant GOLD_XAU_USD_FEED_ID = 0x765d2ba906dbc32ca17cc11f5310a89e9ee1f6420508c63861f2f8ba4ee34bb2;
+    bytes32 constant US_OIL_FEED_ID = 0x925ca92ff005ae943c158e3563f59698ce7e75c5a8c8dd43303a0a154887b3e6;
 
     // Protocol risk parameters
     uint256 constant MIN_COLLATERAL_RATIO = 15000; // 150%
@@ -70,9 +66,7 @@ contract LeprechaunSyntheticAssetDeployment is Script {
         );
 
         // Get the address of the newly created synthetic asset
-        address sXAU = factory.allSyntheticAssets(
-            factory.getSyntheticAssetCount() - 1
-        );
+        address sXAU = factory.allSyntheticAssets(factory.getSyntheticAssetCount() - 1);
 
         console.log(" sXAU deployed at:", sXAU);
 
@@ -98,9 +92,7 @@ contract LeprechaunSyntheticAssetDeployment is Script {
         );
 
         // Get the address of the newly created synthetic asset
-        address sOIL = factory.allSyntheticAssets(
-            factory.getSyntheticAssetCount() - 1
-        );
+        address sOIL = factory.allSyntheticAssets(factory.getSyntheticAssetCount() - 1);
 
         console.log(" sOIL deployed at:", sOIL);
 
