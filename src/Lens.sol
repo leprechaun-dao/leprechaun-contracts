@@ -456,4 +456,204 @@ contract LeprechaunLens {
 
         return (mintableAmount, usdCollateralValue, effectiveRatio);
     }
+
+    /**
+     * @dev Calculate mint amount to achieve a target collateral ratio
+     * @param syntheticAsset The address of the synthetic asset to mint
+     * @param collateralAsset The address of the collateral asset
+     * @param collateralAmount The amount of collateral to use
+     * @param targetRatio The desired collateral ratio in basis points (e.g., 25000 for 250%)
+     * @return mintAmount The amount to mint to achieve the target ratio
+     * @return maxMintable The maximum amount that could be minted
+     * @return effectiveRatio The actual ratio that would be achieved
+     * @return minRequiredRatio The minimum ratio required by the protocol
+     */
+    function calculateMintAmountForTargetRatio(
+        address syntheticAsset,
+        address collateralAsset,
+        uint256 collateralAmount,
+        uint256 targetRatio
+    ) public view returns (uint256 mintAmount, uint256 maxMintable, uint256 effectiveRatio, uint256 minRequiredRatio) {
+        // Get the minimum required ratio for this asset/collateral pair
+        minRequiredRatio = factory.getEffectiveCollateralRatio(syntheticAsset, collateralAsset);
+
+        // Ensure target ratio is not less than minimum required
+        require(targetRatio >= minRequiredRatio, "Target ratio below minimum required");
+
+        // Get maximum mintable amount for reference
+        maxMintable = positionManager.getMintableAmount(syntheticAsset, collateralAsset, collateralAmount);
+
+        // Get token decimals
+        uint8 collateralDecimals = ERC20(collateralAsset).decimals();
+        uint8 syntheticDecimals = ERC20(syntheticAsset).decimals();
+
+        // Get the USD value of the collateral
+        uint256 collateralUsdValue = factory.oracle().getUsdValue(collateralAsset, collateralAmount, collateralDecimals);
+
+        // Calculate the USD value to mint to achieve target ratio
+        uint256 usdValueToMint = (collateralUsdValue * 10000) / targetRatio;
+
+        // Convert USD value to synthetic token amount
+        mintAmount = factory.oracle().getTokenAmount(syntheticAsset, usdValueToMint, syntheticDecimals);
+
+        // Cap at maximum mintable (safety check)
+        if (mintAmount > maxMintable) {
+            mintAmount = maxMintable;
+        }
+
+        // Calculate the effective ratio that would be achieved with this mint amount
+        if (mintAmount > 0) {
+            uint256 mintUsdValue = factory.oracle().getUsdValue(syntheticAsset, mintAmount, syntheticDecimals);
+            effectiveRatio = (collateralUsdValue * 10000) / mintUsdValue;
+        } else {
+            effectiveRatio = type(uint256).max; // Infinite ratio if mint amount is 0
+        }
+
+        return (mintAmount, maxMintable, effectiveRatio, minRequiredRatio);
+    }
+
+    /**
+     * @dev Preview a position with a target collateral ratio
+     * @param syntheticAsset The address of the synthetic asset to mint
+     * @param collateralAsset The address of the collateral asset
+     * @param collateralAmount The amount of collateral to use
+     * @param targetRatio The desired collateral ratio in basis points (e.g., 25000 for 250%)
+     * @return mintAmount The amount to mint to achieve the target ratio
+     * @return collateralUsdValue The USD value of the collateral
+     * @return syntheticUsdValue The USD value of the synthetic tokens to mint
+     * @return effectiveRatio The actual ratio that would be achieved
+     * @return minRequiredRatio The minimum ratio required by the protocol
+     */
+    function previewPositionWithTargetRatio(
+        address syntheticAsset,
+        address collateralAsset,
+        uint256 collateralAmount,
+        uint256 targetRatio
+    )
+        external
+        view
+        returns (
+            uint256 mintAmount,
+            uint256 collateralUsdValue,
+            uint256 syntheticUsdValue,
+            uint256 effectiveRatio,
+            uint256 minRequiredRatio
+        )
+    {
+        // Get the minimum required ratio for this asset/collateral pair
+        minRequiredRatio = factory.getEffectiveCollateralRatio(syntheticAsset, collateralAsset);
+
+        // Get token decimals
+        uint8 collateralDecimals = ERC20(collateralAsset).decimals();
+        uint8 syntheticDecimals = ERC20(syntheticAsset).decimals();
+
+        // Get the USD value of the collateral
+        collateralUsdValue = factory.oracle().getUsdValue(collateralAsset, collateralAmount, collateralDecimals);
+
+        // Calculate mint amount based on target ratio
+        (mintAmount,, effectiveRatio,) =
+            calculateMintAmountForTargetRatio(syntheticAsset, collateralAsset, collateralAmount, targetRatio);
+
+        // Calculate synthetic USD value
+        syntheticUsdValue = factory.oracle().getUsdValue(syntheticAsset, mintAmount, syntheticDecimals);
+
+        return (mintAmount, collateralUsdValue, syntheticUsdValue, effectiveRatio, minRequiredRatio);
+    }
+
+    /**
+     * @dev Calculate collateral amount needed for a specific target ratio and mint amount
+     * @param syntheticAsset The address of the synthetic asset to mint
+     * @param collateralAsset The address of the collateral asset
+     * @param mintAmount The amount of synthetic asset to mint
+     * @param targetRatio The desired collateral ratio in basis points (e.g., 25000 for 250%)
+     * @return collateralAmount The amount of collateral needed
+     * @return collateralUsdValue The USD value of the required collateral
+     * @return syntheticUsdValue The USD value of the synthetic tokens
+     * @return minRequiredRatio The minimum ratio required by the protocol
+     */
+    function calculateCollateralForMintAmount(
+        address syntheticAsset,
+        address collateralAsset,
+        uint256 mintAmount,
+        uint256 targetRatio
+    )
+        external
+        view
+        returns (
+            uint256 collateralAmount,
+            uint256 collateralUsdValue,
+            uint256 syntheticUsdValue,
+            uint256 minRequiredRatio
+        )
+    {
+        // Get the minimum required ratio for this asset/collateral pair
+        minRequiredRatio = factory.getEffectiveCollateralRatio(syntheticAsset, collateralAsset);
+
+        // Ensure target ratio is not less than minimum required
+        require(targetRatio >= minRequiredRatio, "Target ratio below minimum required");
+
+        // Get token decimals
+        uint8 collateralDecimals = ERC20(collateralAsset).decimals();
+        uint8 syntheticDecimals = ERC20(syntheticAsset).decimals();
+
+        // Calculate the USD value of the synthetic asset amount
+        syntheticUsdValue = factory.oracle().getUsdValue(syntheticAsset, mintAmount, syntheticDecimals);
+
+        // Calculate the required USD value of collateral based on the target ratio
+        collateralUsdValue = (syntheticUsdValue * targetRatio) / 10000;
+
+        // Convert to collateral token amount
+        collateralAmount = factory.oracle().getTokenAmount(collateralAsset, collateralUsdValue, collateralDecimals);
+
+        return (collateralAmount, collateralUsdValue, syntheticUsdValue, minRequiredRatio);
+    }
+
+    /**
+     * @dev Calculate how much additional collateral is needed for an existing position to reach a target ratio
+     * @param positionId The ID of the position
+     * @param targetRatio The desired collateral ratio in basis points (e.g., 25000 for 250%)
+     * @return additionalCollateral The additional collateral needed
+     * @return currentRatio The current collateral ratio of the position
+     * @return targetUsdValue The USD value needed to achieve the target ratio
+     * @return currentCollateralUsdValue The current USD value of collateral
+     */
+    function calculateAdditionalCollateralForPosition(uint256 positionId, uint256 targetRatio)
+        external
+        view
+        returns (
+            uint256 additionalCollateral,
+            uint256 currentRatio,
+            uint256 targetUsdValue,
+            uint256 currentCollateralUsdValue
+        )
+    {
+        // Get position details
+        PositionDetails memory position = _getPositionDetails(positionId);
+        require(position.isActive, "Position not active");
+        require(position.mintedAmount > 0, "Position has no debt");
+
+        // Get token decimals
+        uint8 collateralDecimals = ERC20(position.collateralAsset).decimals();
+
+        // Get current ratio
+        currentRatio = position.currentRatio;
+
+        // If already at or above target ratio, no additional collateral needed
+        if (currentRatio >= targetRatio) {
+            return (0, currentRatio, position.collateralUsdValue, position.collateralUsdValue);
+        }
+
+        // Calculate target USD value needed
+        targetUsdValue = (position.debtUsdValue * targetRatio) / 10000;
+        currentCollateralUsdValue = position.collateralUsdValue;
+
+        // Calculate additional USD value needed
+        uint256 additionalUsdValue = targetUsdValue - currentCollateralUsdValue;
+
+        // Convert to collateral tokens
+        additionalCollateral =
+            factory.oracle().getTokenAmount(position.collateralAsset, additionalUsdValue, collateralDecimals);
+
+        return (additionalCollateral, currentRatio, targetUsdValue, currentCollateralUsdValue);
+    }
 }
